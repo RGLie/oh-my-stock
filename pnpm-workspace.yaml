@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+  '@anthropic-ai/claude-code': true
+overrides:
+  esbuild: 0.28.1

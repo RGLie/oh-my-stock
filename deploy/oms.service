@@ -1,0 +1,24 @@
+[Unit]
+Description=Oh My Stock personal investment workspace
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=oms
+Group=oms
+WorkingDirectory=/home/oms/oh-my-stock
+Environment=NODE_ENV=production
+Environment=HOME=/home/oms
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node --import tsx server/index.ts --production
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
