@@ -24,7 +24,12 @@ import type { ViewProps } from "./App";
 import { Empty, LinkOut, date, Modal } from "./ui";
 import { AnalysisProgress } from "./AnalysisProgress";
 import { DailyBriefContent } from "./DailyBrief";
+import { HeadlinesContent, RebalanceContent } from "./Structured";
 import { ReportText } from "./ReportText";
+
+// Jobs owned by other screens (dashboard headlines, rebalancing tab) stay out of the advisor's report list.
+const advisorJob = (job: AnalysisJob) =>
+  !["headlines", "rebalance"].includes(job.skill);
 
 const sections = [
   {
@@ -60,7 +65,7 @@ const sections = [
   {
     id: "allocation",
     title: "포트폴리오 점검",
-    sub: "투자 원칙과 비중 확인",
+    sub: "비중과 집중도 확인",
     icon: Settings2,
   },
   {
@@ -116,7 +121,8 @@ export function AdvisorView({
       state.settings.efforts || { codex: "high", claude: "high" },
     );
   const [researchId, setResearchId] = useState<string | null>(
-      state.jobs.find((j) => j.skill !== "daily")?.id || null,
+      state.jobs.find((j) => j.skill !== "daily" && advisorJob(j))?.id ||
+        null,
     ),
     [dailyId, setDailyId] = useState<string | null>(
       state.jobs.find((j) => j.skill === "daily")?.id || null,
@@ -131,7 +137,9 @@ export function AdvisorView({
   const activeSkill = daily ? "daily" : skill;
   const jobId = daily ? dailyId : researchId;
   const setJobId = daily ? setDailyId : setResearchId;
-  const jobs = state.jobs.filter((j) => (j.skill === "daily") === daily);
+  const jobs = state.jobs.filter(
+    (j) => advisorJob(j) && (j.skill === "daily") === daily,
+  );
   const job = state.jobs.find((j) => j.id === jobId);
   useEffect(() => setReading("compare"), [jobId]);
   const run = async (type = activeSkill, force = true) => {
@@ -753,6 +761,8 @@ export function ResultPanel({
             <ReportText text={readable(r.summary)} />
           </div>
           <DailyBriefContent result={r} job={job} />
+          <RebalanceContent result={r} job={job} />
+          <HeadlinesContent result={r} job={job} />
           {(r.highlights?.length || 0) > 0 && (
             <ul className="report-highlights">
               {r.highlights!.map((h, i) => (

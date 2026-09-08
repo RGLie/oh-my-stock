@@ -35,13 +35,6 @@ export type Evidence = {
   coverage: "full" | "headline" | "user";
   hash: string;
 };
-export type Policy = {
-  horizon: string;
-  principles: string;
-  maxPosition: string;
-  cashFloor: string;
-  monthlyContribution: string;
-};
 export type InvestorProfile = {
   riskTolerance:
     "unspecified" | "conservative" | "balanced" | "growth" | "aggressive";
@@ -83,6 +76,36 @@ export type DailyBrief = {
     evidenceIds: string[];
   }[];
   priorities: string[];
+};
+export type RebalanceAction = "keep" | "add" | "trim" | "exit" | "new";
+export type RebalancePlan = {
+  stance: string;
+  proposals: {
+    symbol: string;
+    name: string;
+    action: RebalanceAction;
+    currentWeight: string | null;
+    proposedWeight: string | null;
+    rationale: string;
+    evidenceIds: string[];
+  }[];
+  cashNote: string;
+  risks: string[];
+};
+export type HeadlineCategory =
+  | "market"
+  | "macro"
+  | "geopolitics"
+  | "policy"
+  | "company"
+  | "other";
+export type Headline = {
+  title: string;
+  summary: string;
+  category: HeadlineCategory;
+  publishedAt: string | null;
+  portfolioRelevance: string;
+  evidenceIds: string[];
 };
 export type RunPhase =
   "connecting" | "researching" | "composing" | "validating";
@@ -156,6 +179,8 @@ export type Provider = {
 };
 export type AnalysisResult = {
   dailyBrief?: DailyBrief | null;
+  rebalance?: RebalancePlan | null;
+  headlines?: Headline[] | null;
   summary: string;
   facts: { statement: string; evidenceIds: string[] }[];
   impacts: string[];
@@ -256,7 +281,6 @@ export type AppState = {
   evidence: Evidence[];
   jobs: AnalysisJob[];
   journal: JournalEntry[];
-  policy: Policy;
   settings: {
     cashUsd: string;
     cashKrw: string;

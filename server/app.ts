@@ -3,7 +3,7 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { Store } from "./store";
 import { TossClient } from "./toss";
-import { valuePortfolio, simulate } from "./finance";
+import { valuePortfolio } from "./finance";
 import { collectNews, hash } from "./research";
 import { providerHealth, runProvider } from "./providers";
 import { commonPrompt, skillTemplates, outputSchema } from "./skills";
@@ -13,7 +13,6 @@ import { accessGuard, remoteAccessFromEnv } from "./access";
 import type {
   AppState,
   Holding,
-  Policy,
   Snapshot,
   AnalysisJob,
   Evidence,
@@ -54,13 +53,6 @@ const defaults: AppState["settings"] = {
   models: { codex: "", claude: "sonnet" },
   efforts: { codex: "high", claude: "high" },
   accountSeq: process.env.TOSS_ACCOUNT_SEQ || "",
-};
-const policyDefaults: Policy = {
-  horizon: "3년 이상",
-  principles: "투자 근거의 변화와 장기 현금흐름을 우선 확인합니다.",
-  maxPosition: "100",
-  cashFloor: "0",
-  monthlyContribution: "0",
 };
 const profileDefaults: InvestorProfile = {
   riskTolerance: "unspecified",
@@ -111,10 +103,6 @@ export function createApp(
   const settings = () => ({
     ...defaults,
     ...store.get<AppState["settings"]>("meta", "settings"),
-  });
-  const policy = () => ({
-    ...policyDefaults,
-    ...store.get<Policy>("meta", "policy"),
   });
   const profile = () => ({
     ...profileDefaults,
@@ -407,7 +395,6 @@ export function createApp(
         evidence: store.all<Evidence>("evidence").slice(0, 200),
         jobs: store.all<AnalysisJob>("jobs").slice(0, 30),
         journal: store.all<JournalEntry>("journal"),
-        policy: policy(),
         profile: profile(),
         settings: settings(),
         connection,
@@ -561,22 +548,6 @@ export function createApp(
     }),
   );
   app.put(
-    "/api/policy",
-    route((req, res) => {
-      const p = z
-        .object({
-          horizon: z.string().min(1).max(100),
-          principles: z.string().max(10000),
-          maxPosition: percent,
-          cashFloor: percent,
-          monthlyContribution: decimal,
-        })
-        .parse(req.body);
-      store.put("meta", "policy", p);
-      res.json({ ok: true });
-    }),
-  );
-  app.put(
     "/api/profile",
     route((req, res) => {
       const input = z
@@ -657,6 +628,7 @@ export function createApp(
             "indicators",
             "fx",
             "allocation",
+            "headlines",
           ]),
           symbols: z.array(symbol).max(20),
         })
@@ -699,31 +671,6 @@ export function createApp(
       const id = randomUUID();
       store.put("journal", id, { ...input, id, createdAt: now() });
       res.status(201).json({ id });
-    }),
-  );
-  app.post(
-    "/api/simulate",
-    route((req, res) => {
-      const input = z
-        .object({
-          targets: z
-            .array(z.object({ id: z.string(), weight: percent }))
-            .max(200),
-          contribution: decimal,
-          mode: z.enum(["contribute", "rebalance"]),
-        })
-        .parse(req.body);
-      const p = policy();
-      res.json(
-        simulate(
-          summary(),
-          input.targets,
-          input.contribution,
-          input.mode,
-          p.cashFloor,
-          p.maxPosition,
-        ),
-      );
     }),
   );
   app.get("/api/export", (_req, res) => {
@@ -996,6 +943,8 @@ export function createApp(
             ...(run.result.metrics || []),
             ...(run.result.dailyBrief?.indices || []),
             ...(run.result.dailyBrief?.events || []),
+            ...(run.result.rebalance?.proposals || []),
+            ...(run.result.headlines || []),
           ].flatMap((f) =>
             f.evidenceIds
               .filter((id) => !ids.has(id))
@@ -1021,6 +970,19 @@ export function createApp(
             )
           )
             run.validation.push("시장 지수와 일정에는 외부 출처가 필요합니다.");
+          if (job.skill === "rebalance" && !run.result.rebalance)
+            run.validation.push("리밸런싱 제안(rebalance)이 응답에 없습니다.");
+          if (job.skill === "headlines" && !run.result.headlines?.length)
+            run.validation.push("주요 뉴스(headlines)가 응답에 없습니다.");
+          if (
+            job.skill === "headlines" &&
+            (run.result.headlines || []).some(
+              (item) =>
+                !item.evidenceIds.length ||
+                item.evidenceIds.every((id) => id === "portfolio-snapshot"),
+            )
+          )
+            run.validation.push("주요 뉴스에는 외부 출처가 필요합니다.");
           if (run.validation.length) {
             run.error =
               "응답·근거 ID 검증에 실패했습니다. " +
@@ -1054,7 +1016,12 @@ export function createApp(
                 title: source.title,
                 url: source.url,
                 body: source.title,
-                category: job.skill === "news" ? "portfolio" : job.skill,
+                category:
+                  job.skill === "news"
+                    ? "portfolio"
+                    : job.skill === "rebalance"
+                      ? "allocation"
+                      : job.skill,
                 symbols:
                   job.target && /^[A-Z0-9.-]+$/.test(job.target)
                     ? [job.target]
@@ -1113,6 +1080,8 @@ export function createApp(
             "indicators",
             "fx",
             "daily",
+            "rebalance",
+            "headlines",
           ]),
           prompt: z.string().max(12000).default(""),
           evidenceIds: z.array(z.string()).max(20).default([]),
@@ -1147,9 +1116,11 @@ export function createApp(
         throw new Error("이전 분석을 찾을 수 없습니다.");
       if (input.skill === "daily" && !input.autoResearch)
         throw new Error("데일리 브리프는 최신 웹 조사를 켜고 실행해 주세요.");
+      if (input.skill === "headlines" && !input.autoResearch)
+        throw new Error("주요 뉴스는 웹 조사를 켜고 실행해 주세요.");
       if (
         !input.autoResearch &&
-        input.skill !== "allocation" &&
+        !["allocation", "rebalance"].includes(input.skill) &&
         evidence.length === 0
       )
         throw new Error("분석할 뉴스나 원문 자료를 먼저 선택해 주세요.");
@@ -1161,7 +1132,6 @@ export function createApp(
           ...portfolio,
           holdings: portfolio.holdings.map(({ account, id, ...h }) => h),
         },
-        policy: policy(),
         profile: profile(),
         ...(window ? { briefWindow: window } : {}),
         fx: fx(),
@@ -1180,7 +1150,6 @@ export function createApp(
       const inputHash = hash(
         JSON.stringify({
           holdings: holdings().map((h) => ({ ...h, updatedAt: undefined })),
-          policy: policy(),
           profile: profile(),
           briefDate: window?.date,
           cash: settings(),
@@ -1188,7 +1157,7 @@ export function createApp(
           skill: input.skill,
           prompt: input.prompt,
           models: input.providers.map((p) => [p, model[p]]),
-          skillVersion: "3.0",
+          skillVersion: "4.0",
           template: templates()[input.skill],
           target: input.target,
           autoResearch: input.autoResearch,
@@ -1258,11 +1227,13 @@ export function createApp(
         throw new Error(
           "한 번에 분석할 자료가 너무 큽니다. 원문 범위를 줄여 주세요.",
         );
-      store.put("meta", "settings", {
-        ...settings(),
-        models: model,
-        efforts: input.efforts,
-      });
+      // Dashboard headlines run at low effort on purpose; they must not overwrite the advisor's saved preferences.
+      if (input.skill !== "headlines")
+        store.put("meta", "settings", {
+          ...settings(),
+          models: model,
+          efforts: input.efforts,
+        });
       store.put("jobs", id, job);
       void executeJob(job);
       res.status(202).json({ id });

@@ -21,6 +21,8 @@ const names: Record<string, string> = {
   fx: "환율",
   allocation: "포트폴리오",
   sector: "섹터",
+  rebalance: "리밸런싱 제안",
+  headlines: "주요 뉴스",
 };
 const statusNames: Record<string, string> = {
   queued: "대기",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HistoryView } from "./History";
+import { HeadlinesCard } from "./Headlines";
 import {
   LayoutDashboard,
   Wallet,
@@ -39,7 +40,7 @@ const navigation = [
   { id: "advisor", name: "AI 투자 파트너", icon: Sparkles },
   { id: "history", name: "AI 실행 기록", icon: History },
   { id: "research", name: "리서치 노트", icon: Newspaper },
-  { id: "rebalance", name: "리밸런싱", icon: SlidersHorizontal },
+  { id: "rebalance", name: "AI 리밸런싱 제안", icon: SlidersHorizontal },
   { id: "journal", name: "투자 기록", icon: BookOpen },
 ];
 export type ViewProps = {
@@ -311,6 +312,13 @@ export default function App() {
                       </button>
                     </div>
                   )}
+                  <HeadlinesCard
+                    {...props!}
+                    onDetail={(id) => {
+                      setHistoryId(id);
+                      navigate("history");
+                    }}
+                  />
                   <div className="dashboard-grid">
                     <section className="card asset-card">
                       <div className="card-top">

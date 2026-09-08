@@ -183,6 +183,45 @@ const resultSchema = z.object({
     })
     .nullable()
     .optional(),
+  rebalance: z
+    .object({
+      stance: z.string(),
+      cashNote: z.string(),
+      risks: z.array(z.string()),
+      proposals: z.array(
+        z.object({
+          symbol: z.string(),
+          name: z.string(),
+          action: z.enum(["keep", "add", "trim", "exit", "new"]),
+          currentWeight: z.string().nullable(),
+          proposedWeight: z.string().nullable(),
+          rationale: z.string(),
+          evidenceIds: z.array(z.string()),
+        }),
+      ),
+    })
+    .nullable()
+    .optional(),
+  headlines: z
+    .array(
+      z.object({
+        title: z.string(),
+        summary: z.string(),
+        category: z.enum([
+          "market",
+          "macro",
+          "geopolitics",
+          "policy",
+          "company",
+          "other",
+        ]),
+        publishedAt: z.string().nullable(),
+        portfolioRelevance: z.string(),
+        evidenceIds: z.array(z.string()),
+      }),
+    )
+    .nullable()
+    .optional(),
   summary: z.string(),
   facts: z.array(
     z.object({ statement: z.string(), evidenceIds: z.array(z.string()) }),

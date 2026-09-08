@@ -28,7 +28,7 @@ const skills = [
   { id: "news", title: "보유 종목 뉴스", sub: "내 자산에 어떤 영향이 있을까" },
   { id: "earnings", title: "실적 깊이 읽기", sub: "숫자 너머의 사업 변화" },
   { id: "macro", title: "시장·매크로", sub: "경제 흐름과 투자 연결하기" },
-  { id: "allocation", title: "포트폴리오 점검", sub: "비중과 투자 원칙 확인" },
+  { id: "allocation", title: "포트폴리오 점검", sub: "비중과 집중도 확인" },
   { id: "sector", title: "섹터 기회 탐색", sub: "저평가 가설과 반대 근거" },
 ];
 const categories: Record<string, string> = {
@@ -41,6 +41,7 @@ const categories: Record<string, string> = {
   indicators: "지표",
   fx: "환율",
   allocation: "포트폴리오 점검",
+  headlines: "주요 뉴스",
 };
 const statusNames: Record<string, string> = {
   queued: "대기 중",
@@ -718,138 +719,7 @@ export function ResearchView({ state, act, notify }: ViewProps) {
   );
 }
 
-export function RebalanceView({ state, act, notify }: ViewProps) {
-  const [mode, setMode] = useState("contribute"),
-    [result, setResult] = useState<any>(null);
-  return (
-    <>
-      <PageHeading
-        eyebrow="STAY IN BALANCE"
-        title="리밸런싱"
-        body="추가 투자금과 목표 비중으로, 다음 배분을 미리 살펴보세요."
-      />
-      <div className="rebalance-layout">
-        <section className="card">
-          <h3>배분 시나리오</h3>
-          <form
-            className="form"
-            onSubmit={async (e) => {
-              const v = values(e);
-              try {
-                setResult(
-                  await act("/simulate", {
-                    mode,
-                    contribution: v.contribution,
-                    targets: state.holdings.map((h) => ({
-                      id: h.id,
-                      weight: v[h.id] || "0",
-                    })),
-                  }),
-                );
-              } catch (e) {
-                setResult(null);
-                notify((e as Error).message);
-              }
-            }}
-          >
-            <label>
-              추가 투자금 (USD)
-              <input
-                name="contribution"
-                inputMode="decimal"
-                defaultValue={state.policy.monthlyContribution}
-              />
-            </label>
-            <label>
-              조정 방식
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option value="contribute">신규 자금·현금으로 배분</option>
-                <option value="rebalance">매도 포함 비중 조정</option>
-              </select>
-            </label>
-            <div className="divider" />
-            <div className="card-top">
-              <strong>종목별 목표 비중</strong>
-              <span className="muted">
-                합계 최대 {100 - Number(state.policy.cashFloor)}%
-              </span>
-            </div>
-            {state.holdings.map((h) => (
-              <label className="target-row" key={h.id}>
-                <span>
-                  {h.symbol}
-                  <small>{h.name}</small>
-                </span>
-                <div>
-                  <input
-                    name={h.id}
-                    inputMode="decimal"
-                    aria-label={`${h.symbol} 목표 비중`}
-                    defaultValue={h.targetWeight || ""}
-                    placeholder="0"
-                  />
-                  <span>%</span>
-                </div>
-              </label>
-            ))}
-            <button
-              className="btn primary full"
-              disabled={!state.holdings.length}
-            >
-              <SlidersHorizontal size={17} />
-              배분 계산하기
-            </button>
-          </form>
-        </section>
-        <section className="card">
-          <div className="card-top">
-            <h3>예상 배분 결과</h3>
-            <span className="category-tag">시뮬레이션</span>
-          </div>
-          {!result ? (
-            <Empty
-              title="내가 원하는 비중을 정해보세요"
-              body="목표 비중과 현금 제약을 확인해 배분 금액을 계산합니다."
-            />
-          ) : (
-            <>
-              <div className="simulation-total">
-                <small>조정 후 현금 · USD</small>
-                <strong>{fmt(result.cashAfter)}</strong>
-              </div>
-              {result.rows.map((r: any) => (
-                <div key={r.id} className="simulation-row">
-                  <div>
-                    <strong>{r.symbol}</strong>
-                    <small>
-                      {Number(r.currentWeight).toFixed(1)}% → 목표{" "}
-                      {r.targetWeight}%
-                    </small>
-                  </div>
-                  <strong className={Number(r.delta) > 0 ? "blue" : "muted"}>
-                    {Number(r.delta) > 0
-                      ? "매수 배분 "
-                      : Number(r.delta) < 0
-                        ? "매도 검토 "
-                        : ""}
-                    {fmt(Math.abs(Number(r.delta)))}
-                  </strong>
-                </div>
-              ))}
-              {result.scaled && (
-                <p className="hint">
-                  가용 현금에 맞춰 매수 배분을 비례 축소했습니다. 목표 비중에
-                  아직 도달하지 않을 수 있어요.
-                </p>
-              )}
-              <div className="note-box">{result.assumptions.join(" · ")}</div>
-            </>
-          )}
-        </section>
-      </div>
-    </>
-  );
-}
+export { RebalanceView } from "./Rebalance";
 
 export function JournalView({ state, act, notify }: ViewProps) {
   const [adding, setAdding] = useState(false);
@@ -964,7 +834,7 @@ export function SettingsView({ state, act, notify }: ViewProps) {
       <PageHeading
         eyebrow="MAKE IT YOURS"
         title="설정 및 연결"
-        body="데이터 연결부터 투자 원칙까지, 나에게 맞게 설정하세요."
+        body="데이터 연결부터 투자 성향까지, 나에게 맞게 설정하세요."
       />
       <div className="settings-layout">
         <section className="card">
@@ -1140,66 +1010,6 @@ export function SettingsView({ state, act, notify }: ViewProps) {
           </form>
         </section>
         <InvestorProfileForm state={state} act={act} notify={notify} />
-        <section className="card">
-          <h3>나의 투자 원칙</h3>
-          <form
-            className="form"
-            onSubmit={async (e) => {
-              const v = values(e);
-              try {
-                await act("/policy", v, "PUT");
-                notify("투자 원칙을 저장했어요.");
-              } catch (e) {
-                notify((e as Error).message);
-              }
-            }}
-          >
-            <label>
-              투자 기간
-              <input
-                name="horizon"
-                defaultValue={state.policy.horizon}
-                required
-              />
-            </label>
-            <label>
-              내가 지키려는 기준
-              <textarea
-                name="principles"
-                rows={4}
-                defaultValue={state.policy.principles}
-              />
-            </label>
-            <div className="form-row">
-              <label>
-                종목 최대 비중 (%)
-                <input
-                  name="maxPosition"
-                  defaultValue={state.policy.maxPosition}
-                />
-              </label>
-              <label>
-                최소 현금 비중 (%)
-                <input name="cashFloor" defaultValue={state.policy.cashFloor} />
-              </label>
-            </div>
-            <label>
-              정기 투자금 (USD)
-              <input
-                name="monthlyContribution"
-                defaultValue={state.policy.monthlyContribution}
-              />
-            </label>
-            <p className="hint">
-              초기 비중 제한은 투자 추천값이 아닙니다. 본인의 원칙을 입력해
-              주세요.
-            </p>
-            <button className="btn primary">
-              <Save size={16} />
-              투자 원칙 저장
-            </button>
-          </form>
-        </section>
         <section className="card backup-card">
           <h3>내 데이터 보관</h3>
           <p>

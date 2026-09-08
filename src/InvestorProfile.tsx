@@ -20,8 +20,8 @@ export function InvestorProfileForm({
         <span className="muted">다음 AI 분석부터 반영</span>
       </div>
       <p className="hint">
-        비워 둔 항목은 AI가 추측하지 않아요. 보유 종목·투자 원칙과 함께 조언의
-        기준으로 사용합니다.
+        비워 둔 항목은 AI가 추측하지 않아요. 보유 종목과 함께 조언의 기준으로
+        사용합니다.
       </p>
       <form
         className="form"
