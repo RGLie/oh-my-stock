@@ -2121,6 +2121,108 @@ td.negative small {
   color: #3a8a5e;
   background: #ebf7f0;
 }
+.importance-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border-radius: 5px;
+  padding: 4px 8px;
+  color: #6b7c91;
+  background: #f2f4f7;
+}
+.importance-tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.importance-tag.high {
+  color: #c93b3b;
+  background: #fdeeee;
+}
+.importance-tag.medium {
+  color: #b0761b;
+  background: #fff6e5;
+}
+.importance-tag.low {
+  color: #7b8798;
+  background: #f2f4f7;
+}
+.headline-item.importance-high .headline-body a,
+.headline-item.importance-high .headline-body strong {
+  color: #1f2f47;
+}
+.headlines-actions .icon-btn.active {
+  background: #eef3fb;
+  color: #3182f6;
+}
+.headlines-models {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  border-radius: 12px;
+  background: #f7f9fc;
+}
+.headlines-models label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: #7c8694;
+  min-width: 0;
+}
+.headlines-models label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.headlines-models .provider-mark {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.headlines-models .provider-mark.claude {
+  font-size: 1rem;
+}
+@media (max-width: 640px) {
+  .headlines-models {
+    grid-template-columns: 1fr;
+  }
+}
+.headlines-models input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+}
+.headlines-models .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.65;
+}
+.headlines-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  border-radius: 10px;
+  background: #fff6e5;
+  color: #8a5a12;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+.headlines-warning svg {
+  flex: none;
+  margin-top: 3px;
+}
 .journal-list {
   display: grid;
   gap: 20px;

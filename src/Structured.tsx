@@ -2,6 +2,7 @@ import type {
   AnalysisJob,
   AnalysisResult,
   HeadlineCategory,
+  HeadlineImportance,
   RebalanceAction,
 } from "../shared/types";
 import { LinkOut } from "./ui";
@@ -21,6 +22,11 @@ export const headlineCategories: Record<HeadlineCategory, string> = {
   policy: "정책",
   company: "기업",
   other: "기타",
+};
+export const importanceNames: Record<HeadlineImportance, string> = {
+  high: "꼭 확인",
+  medium: "중요",
+  low: "참고",
 };
 const weight = (v: string | null) => {
   if (v === null || v === "") return "—";
@@ -139,8 +145,22 @@ export function HeadlinesContent({
       {items.map((h, i) => {
         const source = sourceOf(result, job, h.evidenceIds);
         return (
-          <li key={i} className="headline-item">
+          <li
+            key={i}
+            className={
+              "headline-item" +
+              (h.importance ? " importance-" + h.importance : "")
+            }
+          >
             <div className="headline-meta">
+              {h.importance && (
+                <span
+                  className={"importance-tag " + h.importance}
+                  title={`중요도: ${importanceNames[h.importance] || h.importance}`}
+                >
+                  {importanceNames[h.importance] || h.importance}
+                </span>
+              )}
               <span className={"category-tag " + h.category}>
                 {headlineCategories[h.category] || h.category}
               </span>

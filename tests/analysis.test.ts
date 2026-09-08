@@ -432,6 +432,128 @@ test("partial failure can retry one provider without overwriting the successful 
     await h.close();
   }
 });
+test("retry uses current instructions, template and inputs instead of the copied original job", async () => {
+  const prompts: string[] = [];
+  const h = await harness(async (p, _m, prompt) => {
+    prompts.push(prompt);
+    return result(p);
+  });
+  try {
+    const response = await h.send("/analyses", {
+      skill: "news",
+      providers: ["codex"],
+    });
+    const j = await h.wait((await response.json()).id);
+    // Simulate a job stored by an older version: removed fields and outdated guidance in the copy.
+    h.store.put("jobs", j.id, {
+      ...j,
+      status: "failed",
+      commonInstructions: "OLD-COMMON-INSTRUCTIONS",
+      template: "OLD-TEMPLATE-TEXT",
+      snapshot: { ...(j.snapshot as object), principles: "REMOVED-PRINCIPLES" },
+      runs: [{ ...j.runs[0], status: "failed", result: null }],
+    });
+    await h.send(
+      "/templates/news",
+      { prompt: "지금 적용되는 새 뉴스 분석 기준입니다. 재시도에 사용됩니다." },
+      "PUT",
+    );
+    const retry = await h.send("/analyses/" + j.id + "/retry", {
+      provider: "codex",
+    });
+    const next = await h.wait((await retry.json()).id);
+    assert.equal(next.status, "completed");
+    const sent = prompts[1];
+    assert(!sent.includes("REMOVED-PRINCIPLES"));
+    assert(!sent.includes("OLD-COMMON-INSTRUCTIONS"));
+    assert(!sent.includes("OLD-TEMPLATE-TEXT"));
+    assert(sent.includes("지금 적용되는 새 뉴스 분석 기준입니다"));
+    assert.equal(next.runs[0].effort, j.runs[0].effort);
+    assert.equal(next.parentJobId, undefined);
+  } finally {
+    await h.close();
+  }
+});
+test("dashboard state keeps the latest headlines job and its own model settings", async () => {
+  const h = await harness(async (p) => ({
+    ...result(p),
+    headlines: [
+      {
+        title: "검증 뉴스",
+        summary: "요약",
+        category: "market",
+        importance: "high",
+        publishedAt: null,
+        portfolioRelevance: "관련 낮음",
+        evidenceIds: ["s1"],
+      },
+    ],
+  }));
+  try {
+    const response = await h.send("/analyses", {
+      skill: "headlines",
+      providers: ["codex"],
+      efforts: { codex: "low", claude: "low" },
+    });
+    const headlines = await h.wait((await response.json()).id);
+    assert.equal(headlines.status, "completed");
+    assert.equal(headlines.runs[0].result?.headlines?.[0].importance, "high");
+    for (let i = 0; i < 35; i++)
+      h.store.put("jobs", "filler-" + i, {
+        ...headlines,
+        id: "filler-" + i,
+        skill: "news",
+      });
+    const state = await (await h.read("/state")).json();
+    assert.equal(state.jobs.length, 31);
+    assert(state.jobs.some((j: AnalysisJob) => j.id === headlines.id));
+    assert.deepEqual(state.settings.headlines, {
+      provider: "codex",
+      models: { codex: "", claude: "sonnet" },
+    });
+    // The headline run must not have changed the advisor's saved efforts.
+    assert.deepEqual(state.settings.efforts, { codex: "high", claude: "high" });
+    assert.equal(
+      (
+        await h.send(
+          "/settings/headlines",
+          { provider: "claude", models: { codex: "gpt-5", claude: "opus" } },
+          "PUT",
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await h.send(
+          "/settings/headlines",
+          { provider: "claude", models: { codex: "bad model!", claude: "" } },
+          "PUT",
+        )
+      ).status,
+      400,
+    );
+    await h.send(
+      "/settings",
+      {
+        cashUsd: "1",
+        cashKrw: "0",
+        cashKnown: true,
+        accountSeq: "",
+        models: { codex: "", claude: "sonnet" },
+      },
+      "PUT",
+    );
+    const after = await (await h.read("/state")).json();
+    assert.deepEqual(after.settings.headlines, {
+      provider: "claude",
+      models: { codex: "gpt-5", claude: "opus" },
+    });
+    assert.deepEqual(after.settings.efforts, { codex: "high", claude: "high" });
+  } finally {
+    await h.close();
+  }
+});
 test("active request deduplication and cancellation stop the same job", async () => {
   const h = await harness(
     async (_p, _m, _t, signal) =>

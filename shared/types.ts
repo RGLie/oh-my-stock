@@ -93,16 +93,14 @@ export type RebalancePlan = {
   risks: string[];
 };
 export type HeadlineCategory =
-  | "market"
-  | "macro"
-  | "geopolitics"
-  | "policy"
-  | "company"
-  | "other";
+  "market" | "macro" | "geopolitics" | "policy" | "company" | "other";
+export type HeadlineImportance = "high" | "medium" | "low";
 export type Headline = {
   title: string;
   summary: string;
   category: HeadlineCategory;
+  // Results saved before the label existed have no importance.
+  importance?: HeadlineImportance;
   publishedAt: string | null;
   portfolioRelevance: string;
   evidenceIds: string[];
@@ -272,6 +270,11 @@ export type Summary = {
   holdings: ValuedHolding[];
   fxRate?: string | null;
 };
+// Dashboard headlines keep their own AI and model choice so they never touch the advisor's saved preferences.
+export type HeadlineSettings = {
+  provider: "codex" | "claude";
+  models: { codex: string; claude: string };
+};
 export type AppState = {
   serverNow?: string;
   profile: InvestorProfile;
@@ -288,6 +291,7 @@ export type AppState = {
     models: { codex: string; claude: string };
     efforts?: { codex: string; claude: string };
     accountSeq: string;
+    headlines?: HeadlineSettings;
   };
   connection: {
     configured: boolean;

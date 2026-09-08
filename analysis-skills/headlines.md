@@ -3,7 +3,8 @@
 지금 시점에서 투자자가 **꼭 알아야 할 세계 주요 뉴스**를 웹에서 빠르게 조사해 5~8개로 정리한다. 깊은 분석보다 정확한 사실과 출처 확인을 우선한다.
 
 1. 최근 24~48시간의 글로벌 시장·매크로·지정학·정책(연준·주요 중앙은행·정부)·대형 기업 사건을 검색한다. 검색어에는 공개 주제와 기업명만 넣는다. 보유 종목과 직접 관련된 뉴스가 있으면 우선 포함한다.
-2. headlines 각 항목에 title(한국어 제목), summary(한두 문장의 사실 요약), category, publishedAt(원문 게시 시각을 확인하면 ISO 8601, 아니면 null), portfolioRelevance(내 포트폴리오와의 관련성 한 문장, 관련이 낮으면 그렇게 적는다), evidenceIds(실제 확인한 sources ID)를 채운다.
-3. 항목마다 실제로 열어 확인한 출처를 sources에 기록한다. 출처를 확인하지 못한 뉴스는 넣지 않는다. 검색 결과 페이지 자체를 출처로 쓰지 않는다.
-4. 중요도 순으로 정렬한다. 시장 전체에 영향을 주는 사건을 먼저, 개별 기업 사건은 뒤에 둔다.
-5. headline은 오늘 뉴스 흐름의 핵심 한 문장, summary는 짧게 두 문장. highlights·metrics·impacts·counterarguments·actions·reviewConditions는 최소한으로 채우거나 빈 배열로 둔다. 예측이나 매매 권고를 넣지 않는다.
+2. headlines 각 항목에 title(한국어 제목), summary(한두 문장의 사실 요약), category, importance, publishedAt(원문 게시 시각을 확인하면 ISO 8601, 아니면 null), portfolioRelevance(내 포트폴리오와의 관련성 한 문장, 관련이 낮으면 그렇게 적는다), evidenceIds(실제 확인한 sources ID)를 채운다.
+3. importance는 세 단계로 매긴다. high: 시장 전체 방향이나 보유 종목의 투자 근거에 직접 영향을 주어 오늘 꼭 확인해야 하는 사건. medium: 주요 흐름이지만 포트폴리오에 즉시 미치는 영향은 제한적인 사건. low: 알아두면 좋은 참고 정보. high는 보통 1~3개로 제한하고, 확신이 없으면 낮은 단계를 택한다.
+4. 항목마다 실제로 열어 확인한 출처를 sources에 기록한다. 출처를 확인하지 못한 뉴스는 넣지 않는다. 검색 결과 페이지 자체를 출처로 쓰지 않는다.
+5. importance 높은 순으로 정렬하고, 같은 단계에서는 시장 전체에 영향을 주는 사건을 먼저, 개별 기업 사건은 뒤에 둔다.
+6. headline은 오늘 뉴스 흐름의 핵심 한 문장, summary는 짧게 두 문장. highlights·metrics·impacts·counterarguments·actions·reviewConditions는 최소한으로 채우거나 빈 배열로 둔다. 예측이나 매매 권고를 넣지 않는다.

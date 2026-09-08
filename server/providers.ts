@@ -215,6 +215,8 @@ const resultSchema = z.object({
           "company",
           "other",
         ]),
+        // Optional so an answer without the label still renders; the UI simply omits the tag.
+        importance: z.enum(["high", "medium", "low"]).optional(),
         publishedAt: z.string().nullable(),
         portfolioRelevance: z.string(),
         evidenceIds: z.array(z.string()),

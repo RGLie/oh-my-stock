@@ -20,6 +20,7 @@ import type {
   InvestorProfile,
   AnalysisTrace,
   RunEvent,
+  BriefWindow,
 } from "../shared/types";
 
 const now = () => new Date().toISOString();
@@ -53,7 +54,10 @@ const defaults: AppState["settings"] = {
   models: { codex: "", claude: "sonnet" },
   efforts: { codex: "high", claude: "high" },
   accountSeq: process.env.TOSS_ACCOUNT_SEQ || "",
+  // The dashboard brief defaults to OpenAI and keeps its own models, separate from the advisor's.
+  headlines: { provider: "codex", models: { codex: "", claude: "sonnet" } },
 };
+const modelId = z.string().regex(/^[a-zA-Z0-9._:/-]{0,100}$/);
 const profileDefaults: InvestorProfile = {
   riskTolerance: "unspecified",
   experience: "unspecified",
@@ -125,6 +129,21 @@ export function createApp(
       fx()?.rate || null,
       s.cashKnown,
     );
+  };
+  // What the AI receives about the user right now; account IDs and credentials are excluded.
+  const analysisInput = (window?: BriefWindow) => {
+    const portfolio = summary();
+    return {
+      evidenceId: "portfolio-snapshot",
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.holdings.map(({ account, id, ...h }) => h),
+      },
+      profile: profile(),
+      ...(window ? { briefWindow: window } : {}),
+      fx: fx(),
+      asOf: now(),
+    };
   };
   const snapshot = () => {
     const s = summary();
@@ -387,13 +406,18 @@ export function createApp(
   app.get(
     "/api/state",
     route(async (_req, res) => {
+      const jobs = store.all<AnalysisJob>("jobs");
+      const recent = jobs.slice(0, 30);
+      // The dashboard shows the latest headlines job even when 30 newer analyses have pushed it out of the recent list.
+      const headlines = jobs.find((j) => j.skill === "headlines");
+      if (headlines && !recent.includes(headlines)) recent.push(headlines);
       res.json({
         serverNow: now(),
         holdings: holdings(),
         summary: summary(),
         snapshots: store.all<Snapshot>("snapshots").slice(0, 300).reverse(),
         evidence: store.all<Evidence>("evidence").slice(0, 200),
-        jobs: store.all<AnalysisJob>("jobs").slice(0, 30),
+        jobs: recent,
         journal: store.all<JournalEntry>("journal"),
         profile: profile(),
         settings: settings(),
@@ -542,8 +566,22 @@ export function createApp(
           }),
         })
         .parse(req.body);
-      store.put("meta", "settings", { ...s, efforts: settings().efforts });
+      // Efforts and the dashboard headline choice are saved by other screens and must survive this form.
+      store.put("meta", "settings", { ...settings(), ...s });
       snapshot();
+      res.json({ ok: true });
+    }),
+  );
+  app.put(
+    "/api/settings/headlines",
+    route((req, res) => {
+      const input = z
+        .object({
+          provider: z.enum(["codex", "claude"]),
+          models: z.object({ codex: modelId, claude: modelId }),
+        })
+        .parse(req.body);
+      store.put("meta", "settings", { ...settings(), headlines: input });
       res.json({ ok: true });
     }),
   );
@@ -1087,12 +1125,7 @@ export function createApp(
           evidenceIds: z.array(z.string()).max(20).default([]),
           autoResearch: z.boolean().default(true),
           target: z.string().max(200).default(""),
-          models: z
-            .object({
-              codex: z.string().regex(/^[a-zA-Z0-9._:/-]{0,100}$/),
-              claude: z.string().regex(/^[a-zA-Z0-9._:/-]{0,100}$/),
-            })
-            .optional(),
+          models: z.object({ codex: modelId, claude: modelId }).optional(),
           efforts: z
             .object({
               codex: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]),
@@ -1124,19 +1157,8 @@ export function createApp(
         evidence.length === 0
       )
         throw new Error("분석할 뉴스나 원문 자료를 먼저 선택해 주세요.");
-      const portfolio = summary();
       const window = input.skill === "daily" ? briefWindow() : undefined;
-      const data = {
-        evidenceId: "portfolio-snapshot",
-        portfolio: {
-          ...portfolio,
-          holdings: portfolio.holdings.map(({ account, id, ...h }) => h),
-        },
-        profile: profile(),
-        ...(window ? { briefWindow: window } : {}),
-        fx: fx(),
-        asOf: now(),
-      };
+      const data = analysisInput(window);
       const model = input.models || settings().models;
       for (const p of input.providers) {
         const supported = providerCache.find((x) => x.id === p)?.modelEfforts?.[
@@ -1258,28 +1280,41 @@ export function createApp(
       if (controllers.size >= 2)
         throw new Error("진행 중인 분석이 끝난 뒤 다시 시도해 주세요.");
       const id = randomUUID();
+      // A retry is a new run at this moment: it takes the current instructions, template and portfolio
+      // instead of copying the original job, whose stored inputs may carry since-removed fields (e.g. principles).
+      const window = previous.skill === "daily" ? briefWindow() : undefined;
+      const snap = snapshot();
       const job: AnalysisJob = {
-        ...previous,
         id,
+        title: window ? `${window.date} 데일리 브리프` : previous.title,
+        skill: previous.skill,
+        commonInstructions: commonPrompt,
+        briefWindow: window,
+        prompt: previous.prompt,
         status: "queued",
         createdAt: now(),
+        snapshotId: snap.id,
+        evidenceIds: previous.evidenceIds,
+        evidence: previous.evidence,
+        snapshot: analysisInput(window),
         runs: [
           {
-            ...run,
+            provider: run.provider,
+            model: run.model,
+            effort: run.effort,
             status: "queued",
             result: null,
             error: null,
             startedAt: null,
             finishedAt: null,
             validation: [],
-            toolCount: 0,
-            heartbeatAt: undefined,
-            lastEventAt: undefined,
-            phase: undefined,
-            actualModel: undefined,
           },
         ],
         inputHash: previous.inputHash + ":retry:" + id,
+        autoResearch: previous.autoResearch,
+        target: previous.target,
+        template: templates()[previous.skill],
+        parentJobId: previous.parentJobId,
       };
       store.put("jobs", id, job);
       void executeJob(job);
