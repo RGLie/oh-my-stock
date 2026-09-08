@@ -95,11 +95,20 @@ export function Chart({
   color = "#3182f6",
   height = 220,
   label,
+  empty = {
+    title: "자산 기록이 쌓이면 변화가 보여요",
+    body: "오늘부터 실제 평가자산을 기록합니다",
+  },
+  format = (v: number) =>
+    v.toLocaleString("ko-KR", { maximumFractionDigits: 2 }),
 }: {
-  points: { x: string; y: number }[];
+  // A point with a note marks an external change (deposit, cash edit, quantity change) at that time.
+  points: { x: string; y: number; note?: string }[];
   color?: string;
   height?: number;
   label: string;
+  empty?: { title: string; body: string };
+  format?: (v: number) => string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const id = useRef("g" + Math.random().toString(36).slice(2));
@@ -107,8 +116,8 @@ export function Chart({
     return (
       <div className="chart-empty" style={{ height }}>
         <div className="chart-empty-line" />
-        <p>자산 기록이 쌓이면 변화가 보여요</p>
-        <span>오늘부터 실제 평가자산을 기록합니다</span>
+        <p>{empty.title}</p>
+        <span>{empty.body}</span>
       </div>
     );
   const min = Math.min(...points.map((p) => p.y)),
@@ -171,6 +180,31 @@ export function Chart({
           vectorEffect="non-scaling-stroke"
           strokeLinejoin="round"
         />
+        {points.map((p, i) =>
+          p.note ? (
+            <g key={i} className="chart-marker">
+              <line
+                x1={x(i)}
+                x2={x(i)}
+                y1={y(p.y) + 8}
+                y2={height - 8}
+                stroke={color}
+                strokeOpacity=".35"
+                strokeDasharray="2 4"
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={x(i)}
+                cy={y(p.y)}
+                r="4.5"
+                fill="#fff"
+                stroke={color}
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          ) : null,
+        )}
         {hover !== null && points[hover] && (
           <>
             <line
@@ -186,10 +220,10 @@ export function Chart({
       </svg>
       {hover !== null && points[hover] && (
         <div className="chart-tooltip">
-          {date(points[hover].x)} ·{" "}
-          {points[hover].y.toLocaleString("ko-KR", {
-            maximumFractionDigits: 2,
-          })}
+          {date(points[hover].x)} · {format(points[hover].y)}
+          {points[hover].note && (
+            <small className="chart-tooltip-note">{points[hover].note}</small>
+          )}
         </div>
       )}
       <div className="chart-dates">

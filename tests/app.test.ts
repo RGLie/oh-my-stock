@@ -4,7 +4,8 @@ import { createApp } from "../server/app";
 import { Store } from "../server/store";
 import { TossClient } from "../server/toss";
 import { parseResult, cliEnvironment } from "../server/providers";
-import type { Holding } from "../shared/types";
+import { performanceIndex } from "../shared/performance";
+import type { Holding, Snapshot } from "../shared/types";
 test("store transaction rollback and backup preserve exact data", () => {
   const db = new Store(":memory:");
   db.put("test", "a", { quantity: "0.12345678" });
@@ -74,6 +75,97 @@ test("API validates input, prevents cross-origin writes, handles CSV idempotentl
       restored.put(String(row.kind), String(row.id), row.value);
     assert.deepEqual(restored.all("holdings"), store.all("holdings"));
     restored.close();
+  } finally {
+    runtime.close();
+    await new Promise<void>((r) => server.close(() => r()));
+    store.close();
+  }
+});
+test("snapshots split cash from holdings and record deposits and quantity changes as flows", async () => {
+  const store = new Store(":memory:"),
+    runtime = createApp(store, new TossClient(), false);
+  const server = runtime.app.listen(0, "127.0.0.1");
+  await new Promise<void>((r) => server.once("listening", r));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  try {
+    const state = await (await fetch(base + "/api/state")).json();
+    const send = (path: string, body: any, method = "POST") =>
+      fetch(base + path, {
+        method,
+        headers: {
+          "content-type": "application/json",
+          "x-oms-token": state.csrf,
+        },
+        body: JSON.stringify(body),
+      });
+    const holding: Holding = {
+      id: "h1",
+      symbol: "TEST",
+      name: "검증",
+      currency: "USD",
+      quantity: "2",
+      averageCost: "100",
+      price: "110",
+      priceAt: new Date().toISOString(),
+      source: "manual",
+      account: "manual",
+      sector: "미분류",
+      assetType: "STOCK",
+      thesis: "",
+      targetWeight: null,
+      updatedAt: new Date().toISOString(),
+    };
+    store.put("holdings", holding.id, holding);
+    const settings = {
+      cashUsd: "0",
+      cashKrw: "0",
+      cashKnown: false,
+      accountSeq: "",
+      models: { codex: "", claude: "sonnet" },
+    };
+    await send("/api/settings", settings, "PUT");
+    // Confirming 1,000 USD of cash is a flow, not a gain.
+    await send(
+      "/api/settings",
+      { ...settings, cashUsd: "1000", cashKnown: true },
+      "PUT",
+    );
+    // Two more shares appear (sync or purchase) while cash is unchanged: a 220 USD flow.
+    await send(
+      "/api/holdings/h1",
+      {
+        symbol: "TEST",
+        name: "검증",
+        currency: "USD",
+        quantity: "4",
+        averageCost: "100",
+      },
+      "PATCH",
+    );
+    const snaps = store.all<Snapshot>("snapshots").reverse();
+    assert.equal(snaps.length, 3);
+    assert.equal(snaps[0].stockUsd, "220.00000000");
+    assert.equal(snaps[0].cashUsd, "0.00000000");
+    assert.equal(snaps[0].flowUsd, "0.00000000");
+    assert.equal(snaps[1].usd, "1220.00000000");
+    assert.equal(snaps[1].stockUsd, "220.00000000");
+    assert.deepEqual(snaps[1].flows, [
+      { label: "현금 변경", usd: "1000.00000000" },
+    ]);
+    assert.equal(snaps[2].usd, "1440.00000000");
+    assert.deepEqual(snaps[2].flows, [
+      { label: "TEST 수량 +2", usd: "220.00000000" },
+    ]);
+    assert.equal(snaps[2].flowUsd, "220.00000000");
+    // The index stays flat: every change so far was a flow, never a price move.
+    assert.deepEqual(
+      performanceIndex(snaps).map((p) => p.y),
+      [100, 100, 100],
+    );
+    const after = await (await fetch(base + "/api/state")).json();
+    assert.equal(after.snapshots.length, 3);
+    assert(after.snapshots.every((s: Snapshot) => !("positions" in s)));
+    assert.equal(after.snapshots[2].flowUsd, "220.00000000");
   } finally {
     runtime.close();
     await new Promise<void>((r) => server.close(() => r()));

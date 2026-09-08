@@ -249,6 +249,8 @@ export type JournalEntry = {
   createdAt: string;
   jobId?: string;
 };
+// One external cash flow detected between two consecutive snapshots (deposit, cash edit, quantity change).
+export type SnapshotFlow = { label: string; usd: string };
 export type Snapshot = {
   id: string;
   at: string;
@@ -256,6 +258,14 @@ export type Snapshot = {
   krw: string | null;
   complete: boolean;
   composition: string;
+  // Fields below exist only on snapshots recorded after cash and holdings were split; older records lack them.
+  stockUsd?: string | null;
+  cashUsd?: string;
+  fxRate?: string | null;
+  flowUsd?: string;
+  flows?: SnapshotFlow[];
+  // Quantity and USD price per holding id, used server-side to measure flows; not sent to the browser.
+  positions?: Record<string, { q: string; p: string | null }>;
 };
 export type Summary = {
   usd: string | null;

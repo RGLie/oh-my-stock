@@ -3,7 +3,7 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { Store } from "./store";
 import { TossClient } from "./toss";
-import { valuePortfolio } from "./finance";
+import { D, valuePortfolio } from "./finance";
 import { collectNews, hash } from "./research";
 import { providerHealth, runProvider } from "./providers";
 import { commonPrompt, skillTemplates, outputSchema } from "./skills";
@@ -147,6 +147,58 @@ export function createApp(
   };
   const snapshot = () => {
     const s = summary();
+    const rate = s.fxRate ? D(s.fxRate) : null;
+    // Cash and holdings are recorded separately so the chart can show holdings alone and
+    // measure deposits, cash edits and quantity changes as flows rather than as performance.
+    const positions: NonNullable<Snapshot["positions"]> = {};
+    for (const h of s.holdings) {
+      const conversion =
+        h.currency === "USD" ? D(1) : rate ? D(1).div(rate) : null;
+      positions[h.id] = {
+        q: h.quantity,
+        p:
+          h.price !== null && conversion
+            ? D(h.price).mul(conversion).toFixed(8)
+            : null,
+      };
+    }
+    let cash = s.cashKnown ? D(s.cashUsd) : D(0);
+    if (s.cashKnown && D(s.cashKrw).gt(0) && rate)
+      cash = cash.plus(D(s.cashKrw).div(rate));
+    const previous = store.recent<Snapshot>("snapshots", 1)[0];
+    const flows: Snapshot["flows"] = [];
+    if (previous?.positions) {
+      const symbols = new Map(s.holdings.map((h) => [h.id, h.symbol]));
+      for (const id of new Set([
+        ...Object.keys(previous.positions),
+        ...Object.keys(positions),
+      ])) {
+        const before = previous.positions[id],
+          after = positions[id];
+        const q0 = D(before?.q ?? 0),
+          q1 = D(after?.q ?? 0);
+        const p0 = before?.p ?? null,
+          p1 = after?.p ?? null;
+        // With prices on both sides only the quantity change is a flow; when a price appears or
+        // disappears the whole measurable value moves, otherwise it would look like a return.
+        const usd =
+          p0 !== null && p1 !== null
+            ? q1.minus(q0).mul(p1)
+            : q1.mul(p1 ?? 0).minus(q0.mul(p0 ?? 0));
+        if (!usd.isZero())
+          flows.push({
+            label: q1.eq(q0)
+              ? `${symbols.get(id) || id.split(":").pop()} 시세 반영`
+              : `${symbols.get(id) || id.split(":").pop()} 수량 ${
+                  q1.gt(q0) ? "+" : ""
+                }${q1.minus(q0).toString()}`,
+            usd: usd.toFixed(8),
+          });
+      }
+      const cashDelta = cash.minus(previous.cashUsd ?? 0);
+      if (!cashDelta.isZero())
+        flows.push({ label: "현금 변경", usd: cashDelta.toFixed(8) });
+    }
     const item: Snapshot = {
       id: randomUUID(),
       at: now(),
@@ -162,6 +214,12 @@ export function createApp(
           settings().cashUsd +
           settings().cashKrw,
       ),
+      stockUsd: s.usd === null ? null : D(s.usd).minus(cash).toFixed(8),
+      cashUsd: cash.toFixed(8),
+      fxRate: s.fxRate,
+      flowUsd: flows.reduce((sum, f) => sum.plus(f.usd), D(0)).toFixed(8),
+      flows,
+      positions,
     };
     store.put("snapshots", item.id, item);
     return item;
@@ -415,7 +473,10 @@ export function createApp(
         serverNow: now(),
         holdings: holdings(),
         summary: summary(),
-        snapshots: store.all<Snapshot>("snapshots").slice(0, 300).reverse(),
+        snapshots: store
+          .recent<Snapshot>("snapshots", 300)
+          .reverse()
+          .map(({ positions, ...s }) => s),
         evidence: store.all<Evidence>("evidence").slice(0, 200),
         jobs: recent,
         journal: store.all<JournalEntry>("journal"),

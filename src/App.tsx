@@ -23,6 +23,7 @@ import {
   History,
 } from "lucide-react";
 import type { AppState, Holding } from "../shared/types";
+import { series, type SeriesView } from "../shared/performance";
 import { Chart, Empty, Loading, Modal, date, fmt, pct, tone } from "./ui";
 import {
   PortfolioView,
@@ -43,6 +44,30 @@ const navigation = [
   { id: "rebalance", name: "AI 리밸런싱 제안", icon: SlidersHorizontal },
   { id: "journal", name: "투자 기록", icon: BookOpen },
 ];
+// Three readings of the same snapshot history; the raw records are never rewritten.
+const chartViews: Record<
+  SeriesView,
+  { name: string; legend: string; caption: string; empty: string }
+> = {
+  total: {
+    name: "총자산",
+    legend: "기록 이후 평가자산",
+    caption: "입출금·보유 변경 포함 · 변경 시점은 점으로 표시",
+    empty: "오늘부터 실제 평가자산을 기록합니다",
+  },
+  stock: {
+    name: "주식만",
+    legend: "보유 주식 평가액",
+    caption: "현금 제외 · 현금 입력을 바꿔도 움직이지 않아요",
+    empty: "현금과 주식을 나눠 기록한 시점부터 표시돼요",
+  },
+  index: {
+    name: "성과 지수",
+    legend: "성과 지수 · 시작 100",
+    caption: "입금·출금·현금 수정·매수·매도 영향을 제외한 시세 변화",
+    empty: "입출금을 구분해 기록한 시점부터 표시돼요",
+  },
+};
 export type ViewProps = {
   state: AppState;
   act: (path: string, body?: unknown, method?: string) => Promise<any>;
@@ -58,6 +83,7 @@ export default function App() {
     [holding, setHolding] = useState<Holding | "new" | null>(null),
     [stock, setStock] = useState<Holding | null>(null),
     [currency, setCurrency] = useState<"KRW" | "USD">("KRW"),
+    [chartView, setChartView] = useState<SeriesView>("total"),
     [menu, setMenu] = useState(false);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const latestRequest = useRef(0);
@@ -359,29 +385,50 @@ export default function App() {
                           보유분 평가손익 · USD 기준
                         </span>
                       </div>
+                      <div className="chart-view">
+                        <div className="segmented" aria-label="차트 보기">
+                          {(Object.keys(chartViews) as SeriesView[]).map(
+                            (v) => (
+                              <button
+                                key={v}
+                                className={chartView === v ? "selected" : ""}
+                                aria-pressed={chartView === v}
+                                onClick={() => setChartView(v)}
+                              >
+                                {chartViews[v].name}
+                              </button>
+                            ),
+                          )}
+                        </div>
+                        <small>{chartViews[chartView].caption}</small>
+                      </div>
                       <div className="asset-chart">
                         <Chart
-                          points={state.snapshots
-                            .filter(
-                              (s) =>
-                                s.complete &&
-                                (currency === "KRW"
-                                  ? s.krw !== null
-                                  : s.usd !== null),
-                            )
-                            .map((s) => ({
-                              x: s.at,
-                              y: Number(currency === "KRW" ? s.krw : s.usd),
-                            }))}
-                          label="기록 이후 자산 평가액 추이"
+                          points={series(state.snapshots, chartView, currency)}
+                          label={chartViews[chartView].legend + " 추이"}
+                          empty={{
+                            title: "자산 기록이 쌓이면 변화가 보여요",
+                            body: chartViews[chartView].empty,
+                          }}
+                          format={(v) =>
+                            chartView === "index"
+                              ? v.toFixed(2)
+                              : fmt(v, currency)
+                          }
                         />
                       </div>
                       <div className="asset-footer">
                         <span>
                           <span className="legend-dot" />
-                          기록 이후 평가자산
+                          {chartViews[chartView].legend}
                         </span>
-                        <span>입출금·보유 변경 포함</span>
+                        <span>
+                          {chartView === "index"
+                            ? "시세 변화만 · 통화 무관"
+                            : chartView === "stock"
+                              ? "현금 제외"
+                              : "입출금·보유 변경 포함"}
+                        </span>
                       </div>
                     </section>
                     <div className="dashboard-side">

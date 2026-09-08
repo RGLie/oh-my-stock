@@ -938,6 +938,30 @@ main {
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
+.chart-tooltip-note {
+  display: block;
+  margin-top: 3px;
+  color: #7c8694;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  max-width: 320px;
+}
+.chart-view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.chart-view .segmented {
+  font-size: 0.7rem;
+}
+.chart-view > small {
+  color: #9ba4b1;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
 .chart-dates {
   display: flex;
   justify-content: space-between;

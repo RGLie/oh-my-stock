@@ -20,6 +20,15 @@ export class Store {
       .all(kind)
       .map((r) => JSON.parse(String(r.payload)));
   }
+  // Newest first, limited in SQL so growing histories (snapshots) are not fully parsed on every read.
+  recent<T>(kind: string, limit: number): T[] {
+    return this.db
+      .prepare(
+        "SELECT payload FROM records WHERE kind=? ORDER BY rowid DESC LIMIT ?",
+      )
+      .all(kind, limit)
+      .map((r) => JSON.parse(String(r.payload)));
+  }
   get<T>(kind: string, id: string): T | undefined {
     const r = this.db
       .prepare("SELECT payload FROM records WHERE kind=? AND id=?")
