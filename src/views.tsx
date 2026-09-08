@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { Holding, Evidence, AnalysisJob } from "../shared/types";
 import { type ViewProps, HoldingsTable } from "./App";
+import { fallbackHeadlineSettings } from "./Headlines";
 import { Modal, Empty, Chart, Loading, LinkOut, date, fmt } from "./ui";
 const skills = [
   { id: "news", title: "보유 종목 뉴스", sub: "내 자산에 어떤 영향이 있을까" },
@@ -827,6 +828,99 @@ export function JournalView({ state, act, notify }: ViewProps) {
   );
 }
 
+// Light jobs (the dashboard headlines) get their own cheaper AI and models, separate from the
+// advisor's heavy analysis models saved above.
+function QuickModelSettings({
+  state,
+  act,
+  notify,
+}: Pick<ViewProps, "state" | "act" | "notify">) {
+  const saved = state.settings.headlines || fallbackHeadlineSettings;
+  return (
+    <section className="card">
+      <h3>빠른 조사용 AI</h3>
+      <p className="hint form-intro">
+        대시보드의 <strong>꼭 알아야 할 주요 뉴스</strong>처럼 깊은 분석이 필요
+        없는 작업에 쓰는 AI와 모델입니다. 위의 분석 모델과 따로 저장되며, 추론
+        강도는 항상 모델이 지원하는 가장 낮은 단계로 실행해요. 가볍고 빠른
+        모델을 골라 사용량을 아끼세요.
+      </p>
+      <form
+        className="form"
+        onSubmit={async (e) => {
+          const v = values(e);
+          try {
+            await act(
+              "/settings/headlines",
+              {
+                provider: v.provider,
+                models: { codex: v.codex.trim(), claude: v.claude.trim() },
+              },
+              "PUT",
+            );
+            notify("빠른 조사용 AI 설정을 저장했어요.");
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+      >
+        <fieldset className="quick-provider">
+          <legend>기본으로 조사할 AI</legend>
+          <div className="provider-options">
+            {(["codex", "claude"] as const).map((id) => {
+              const p = state.providers.find((x) => x.id === id);
+              return (
+                <label key={id}>
+                  <input
+                    type="radio"
+                    name="provider"
+                    value={id}
+                    defaultChecked={saved.provider === id}
+                  />
+                  <span className={"provider-mark " + id}>
+                    {id === "codex" ? "O" : "✳"}
+                  </span>
+                  {id === "codex" ? "OpenAI" : "Claude"}
+                  <small>{p?.authenticated ? "로그인됨" : "로그인 필요"}</small>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        <div className="form-row">
+          {(["codex", "claude"] as const).map((id) => (
+            <label key={id}>
+              {id === "codex" ? "OpenAI" : "Claude"} 빠른 조사 모델
+              <input
+                name={id}
+                list={"quick-" + id + "-models"}
+                defaultValue={saved.models[id]}
+                placeholder="비워두면 CLI 기본 모델"
+                pattern="[a-zA-Z0-9._:/-]*"
+              />
+              <datalist id={"quick-" + id + "-models"}>
+                {state.providers
+                  .find((p) => p.id === id)
+                  ?.models.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+              </datalist>
+            </label>
+          ))}
+        </div>
+        <p className="hint">
+          OpenAI 목록은 로컬 Codex 모델 캐시에서 읽습니다. Claude는 sonnet·opus
+          별칭 외에 haiku 같은 다른 별칭이나 정확한 모델 ID를 직접 입력할 수
+          있어요. 지원하지 않는 모델은 실행 시 오류로 표시됩니다.
+        </p>
+        <button className="btn primary">
+          <Save size={16} />
+          빠른 조사용 설정 저장
+        </button>
+      </form>
+    </section>
+  );
+}
 export function SettingsView({ state, act, notify }: ViewProps) {
   const [checking, setChecking] = useState(false);
   return (
@@ -1009,6 +1103,7 @@ export function SettingsView({ state, act, notify }: ViewProps) {
             </button>
           </form>
         </section>
+        <QuickModelSettings state={state} act={act} notify={notify} />
         <InvestorProfileForm state={state} act={act} notify={notify} />
         <section className="card backup-card">
           <h3>내 데이터 보관</h3>

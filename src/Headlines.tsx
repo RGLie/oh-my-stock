@@ -12,7 +12,7 @@ const providerNames: Record<ProviderId, string> = {
   codex: "OpenAI",
   claude: "Claude",
 };
-const fallbackSettings: HeadlineSettings = {
+export const fallbackHeadlineSettings: HeadlineSettings = {
   provider: "codex",
   models: { codex: "", claude: "sonnet" },
 };
@@ -24,14 +24,14 @@ export function HeadlinesCard({
   act,
   notify,
   onDetail,
-}: ViewProps & { onDetail: (id: string) => void }) {
-  const saved = state.settings.headlines || fallbackSettings;
+  onSettings,
+}: ViewProps & { onDetail: (id: string) => void; onSettings: () => void }) {
+  // Models come from Settings → 빠른 조사용 AI; this card only picks which of the two AIs runs.
+  const saved = state.settings.headlines || fallbackHeadlineSettings;
   const authenticated = state.providers
     .filter((p) => p.authenticated)
     .map((p) => p.id);
   const [choice, setChoice] = useState<ProviderId>(saved.provider);
-  const [models, setModels] = useState(saved.models);
-  const [showModels, setShowModels] = useState(false);
   const [busy, setBusy] = useState(false);
   // Derived on every render: when the login check finishes late, a provider that turned out to be
   // signed out is never requested. Only an authenticated AI can be selected.
@@ -44,22 +44,19 @@ export function HeadlinesCard({
   const result = run?.status === "completed" ? run.result : null;
   const effortFor = (id: ProviderId) => {
     const supported = state.providers.find((p) => p.id === id)?.modelEfforts?.[
-      models[id]
+      saved.models[id]
     ];
     return supported?.length
       ? effortOrder.find((e) => supported.includes(e)) || supported[0]
       : "low";
   };
-  const save = async (next: HeadlineSettings) => {
+  const pick = async (id: ProviderId) => {
+    setChoice(id);
     try {
-      await act("/settings/headlines", next, "PUT");
+      await act("/settings/headlines", { ...saved, provider: id }, "PUT");
     } catch (e) {
       notify((e as Error).message);
     }
-  };
-  const pick = (id: ProviderId) => {
-    setChoice(id);
-    void save({ provider: id, models });
   };
   const refresh = async () => {
     setBusy(true);
@@ -70,7 +67,7 @@ export function HeadlinesCard({
         target: "",
         evidenceIds: [],
         providers: [provider],
-        models,
+        models: saved.models,
         efforts: { codex: effortFor("codex"), claude: effortFor("claude") },
         autoResearch: true,
         force: true,
@@ -87,6 +84,7 @@ export function HeadlinesCard({
     }
   };
   const usedModel = run?.actualModel || run?.model;
+  const plannedModel = saved.models[provider] || "CLI 기본 모델";
   return (
     <section className="card headlines-card">
       <div className="card-top">
@@ -115,7 +113,7 @@ export function HeadlinesCard({
                 disabled={!authenticated.includes(id)}
                 title={
                   authenticated.includes(id)
-                    ? undefined
+                    ? `${saved.models[id] || "CLI 기본 모델"}로 조사`
                     : "설정에서 로그인을 완료하면 선택할 수 있어요"
                 }
                 onClick={() => pick(id)}
@@ -125,12 +123,12 @@ export function HeadlinesCard({
             ))}
           </div>
           <button
-            className={"icon-btn " + (showModels ? "active" : "")}
-            aria-label="뉴스 조사 모델 설정"
-            aria-expanded={showModels}
-            onClick={() => setShowModels(!showModels)}
+            className="text-btn headlines-model"
+            title="설정 → 빠른 조사용 AI에서 모델을 바꿀 수 있어요"
+            onClick={onSettings}
           >
-            <Settings2 size={17} />
+            <Settings2 size={14} />
+            {plannedModel}
           </button>
           <button
             className="btn"
@@ -142,51 +140,6 @@ export function HeadlinesCard({
           </button>
         </div>
       </div>
-      {showModels && (
-        <div className="headlines-models">
-          {providerIds.map((id) => {
-            const info = state.providers.find((p) => p.id === id);
-            return (
-              <label key={id}>
-                <span>
-                  <span className={"provider-mark " + id}>
-                    {id === "codex" ? "O" : "✳"}
-                  </span>
-                  {providerNames[id]} 모델
-                </span>
-                <input
-                  list={"headline-models-" + id}
-                  aria-label={`${providerNames[id]} 뉴스 조사 모델`}
-                  value={models[id]}
-                  placeholder="비워두면 CLI 기본 모델"
-                  pattern="[a-zA-Z0-9._:/-]*"
-                  onChange={(e) =>
-                    setModels({ ...models, [id]: e.target.value.trim() })
-                  }
-                  onBlur={() => {
-                    if (models[id] !== saved.models[id])
-                      void save({ provider: choice, models });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter")
-                      (e.target as HTMLInputElement).blur();
-                  }}
-                />
-                <datalist id={"headline-models-" + id}>
-                  {info?.models.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              </label>
-            );
-          })}
-          <p className="hint">
-            이 카드 전용 설정이에요. AI 투자 파트너의 모델·강도 설정과 따로
-            저장되며, 추론 강도는 항상 모델이 지원하는 가장 낮은 단계로
-            실행합니다.
-          </p>
-        </div>
-      )}
       {running && run ? (
         <AnalysisProgress run={run} createdAt={job.createdAt} compact />
       ) : result?.headlines?.length ? (

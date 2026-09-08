@@ -344,6 +344,7 @@ export default function App() {
                       setHistoryId(id);
                       navigate("history");
                     }}
+                    onSettings={() => navigate("settings")}
                   />
                   <div className="dashboard-grid">
                     <section className="card asset-card">

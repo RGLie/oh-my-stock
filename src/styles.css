@@ -2180,56 +2180,36 @@ td.negative small {
 .headline-item.importance-high .headline-body strong {
   color: #1f2f47;
 }
-.headlines-actions .icon-btn.active {
-  background: #eef3fb;
-  color: #3182f6;
+.headlines-actions .headlines-model {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: #f5f7fa;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.headlines-models {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 18px;
-  padding: 14px 16px;
-  margin: 0 0 16px;
-  border-radius: 12px;
-  background: #f7f9fc;
-}
-.headlines-models label {
+.quick-provider {
+  border: 0;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  font-size: 0.78rem;
-  color: #7c8694;
-  min-width: 0;
+  gap: 10px;
 }
-.headlines-models label > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.quick-provider legend {
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: #5d6a7d;
+  margin-bottom: 10px;
 }
-.headlines-models .provider-mark {
-  width: 22px;
-  height: 22px;
-  font-size: 13px;
-  border-radius: 6px;
+.quick-provider .provider-options label {
+  cursor: pointer;
 }
-.headlines-models .provider-mark.claude {
-  font-size: 1rem;
-}
-@media (max-width: 640px) {
-  .headlines-models {
-    grid-template-columns: 1fr;
-  }
-}
-.headlines-models input {
-  width: 100%;
-  min-width: 0;
-  padding: 10px 12px;
-  font-size: 0.86rem;
-}
-.headlines-models .hint {
-  grid-column: 1 / -1;
-  margin: 0;
-  line-height: 1.65;
+.quick-provider input[type="radio"] {
+  width: auto;
 }
 .headlines-warning {
   display: flex;
