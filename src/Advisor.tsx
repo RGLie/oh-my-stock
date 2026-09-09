@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sparkles,
+  History,
+  CornerDownRight,
   RefreshCw,
   FileText,
   Globe2,
@@ -121,8 +123,7 @@ export function AdvisorView({
       state.settings.efforts || { codex: "high", claude: "high" },
     );
   const [researchId, setResearchId] = useState<string | null>(
-      state.jobs.find((j) => j.skill !== "daily" && advisorJob(j))?.id ||
-        null,
+      state.jobs.find((j) => j.skill !== "daily" && advisorJob(j))?.id || null,
     ),
     [dailyId, setDailyId] = useState<string | null>(
       state.jobs.find((j) => j.skill === "daily")?.id || null,
@@ -529,25 +530,27 @@ export function AdvisorView({
       )}
       <div className="section-heading">
         <div>
-          <h2>{daily ? "오늘의 브리핑" : "분석 보고서"}</h2>
+          <h2>
+            {daily ? "오늘의 브리핑" : "분석 보고서"}
+            {jobs.length > 1 && <span className="count">{jobs.length}</span>}
+          </h2>
           <span className="muted">
             핵심부터 읽고, 궁금한 근거를 펼쳐보세요.
           </span>
         </div>
         {jobs.length > 0 && (
-          <select
-            aria-label="이전 분석 선택"
-            value={jobId || ""}
-            onChange={(e) => setJobId(e.target.value)}
+          <button
+            className="text-btn"
+            onClick={() => onHistory(jobId || jobs[0].id)}
           >
-            {jobs.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.title} · {date(j.createdAt)}
-              </option>
-            ))}
-          </select>
+            <History size={15} />
+            전체 기록 보기
+          </button>
         )}
       </div>
+      {jobs.length > 1 && (
+        <ReportPicker jobs={jobs} selected={jobId} onSelect={setJobId} />
+      )}
       {!job ? (
         <section className="card">
           <Empty
@@ -710,6 +713,79 @@ export function AdvisorView({
         </Modal>
       )}
     </>
+  );
+}
+const skillNames: Record<string, string> = Object.fromEntries([
+  ...sections.map((s) => [s.id, s.title]),
+  ["daily", "데일리 브리프"],
+]);
+// Horizontal strip of recent reports; replaces the plain <select> so status, AI, and follow-up chains are visible at a glance.
+function ReportPicker({
+  jobs,
+  selected,
+  onSelect,
+}: {
+  jobs: AnalysisJob[];
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current
+      ?.querySelector<HTMLElement>(".report-pick.selected")
+      ?.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+  }, [selected]);
+  return (
+    <div
+      className="report-picker"
+      ref={ref}
+      role="listbox"
+      aria-label="이전 분석 선택"
+    >
+      {jobs.map((j) => (
+        <button
+          key={j.id}
+          role="option"
+          aria-selected={selected === j.id}
+          className={"report-pick " + (selected === j.id ? "selected" : "")}
+          onClick={() => onSelect(j.id)}
+        >
+          <span className="report-pick-top">
+            <small>{skillNames[j.skill] || j.skill}</small>
+            {j.parentJobId && (
+              <small className="report-pick-followup">
+                <CornerDownRight size={11} />
+                후속
+              </small>
+            )}
+            {j.status !== "completed" && (
+              <span className={"status-pill " + j.status}>
+                {statuses[j.status]}
+              </span>
+            )}
+          </span>
+          <strong>{j.skill === "daily" ? j.title : j.prompt || j.title}</strong>
+          <span className="report-pick-meta">
+            <time dateTime={j.createdAt}>{date(j.createdAt)}</time>
+            <span className="report-pick-ai">
+              {j.runs.map((r) => (
+                <span
+                  key={r.provider}
+                  className={"provider-mark " + r.provider}
+                  title={r.provider === "codex" ? "OpenAI" : "Claude"}
+                >
+                  {r.provider === "codex" ? "O" : "✳"}
+                </span>
+              ))}
+            </span>
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 export function ResultPanel({
