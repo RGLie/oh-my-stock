@@ -12,10 +12,15 @@ const signedUsd = (value: string) => {
   );
 };
 // Text shown on a chart marker: every flow recorded between the previous snapshot and this one.
-export const flowNote = (s: Snapshot) =>
-  s.flows?.length
-    ? s.flows.map((f) => `${f.label} ${signedUsd(f.usd)}`).join(" · ")
+// Flows below half a cent would read "$0" and only clutter the chart, so they get no marker.
+export const flowNote = (s: Snapshot) => {
+  const visible = (s.flows ?? []).filter(
+    (f) => Math.abs(Number(f.usd)) >= 0.005,
+  );
+  return visible.length
+    ? visible.map((f) => `${f.label} ${signedUsd(f.usd)}`).join(" · ")
     : undefined;
+};
 
 // Chronological snapshots → chart points for one view.
 // total: observed valuation including cash (deposits and edits show as steps, marked).

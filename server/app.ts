@@ -195,7 +195,9 @@ export function createApp(
             usd: usd.toFixed(8),
           });
       }
-      const cashDelta = cash.minus(previous.cashUsd ?? 0);
+      // Compare at the stored precision; otherwise the rounding residue of the previous
+      // record registers as a flow on every snapshot and litters the chart with markers.
+      const cashDelta = D(cash.toFixed(8)).minus(previous.cashUsd ?? 0);
       if (!cashDelta.isZero())
         flows.push({ label: "현금 변경", usd: cashDelta.toFixed(8) });
     }

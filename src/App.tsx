@@ -83,7 +83,7 @@ export default function App() {
     [holding, setHolding] = useState<Holding | "new" | null>(null),
     [stock, setStock] = useState<Holding | null>(null),
     [currency, setCurrency] = useState<"KRW" | "USD">("KRW"),
-    [chartView, setChartView] = useState<SeriesView>("total"),
+    [chartView, setChartView] = useState<SeriesView>("index"),
     [menu, setMenu] = useState(false);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const latestRequest = useRef(0);
