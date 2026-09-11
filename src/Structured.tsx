@@ -1,6 +1,7 @@
 import type {
   AnalysisJob,
   AnalysisResult,
+  Conviction,
   HeadlineCategory,
   HeadlineImportance,
   RebalanceAction,
@@ -27,6 +28,11 @@ export const importanceNames: Record<HeadlineImportance, string> = {
   high: "꼭 확인",
   medium: "중요",
   low: "참고",
+};
+export const convictionNames: Record<Conviction, string> = {
+  high: "확신 높음",
+  medium: "확신 보통",
+  low: "확신 낮음",
 };
 const weight = (v: string | null) => {
   if (v === null || v === "") return "—";
@@ -100,9 +106,22 @@ export function RebalanceContent({
                   <span className={"action-pill " + p.action}>
                     {actionNames[p.action] || p.action}
                   </span>
+                  {p.conviction && (
+                    <span
+                      className={"conviction-tag " + p.conviction}
+                      title="근거의 질에 따른 AI의 확신도"
+                    >
+                      {convictionNames[p.conviction] || p.conviction}
+                    </span>
+                  )}
                 </td>
                 <td className="rationale">
                   <ReportText text={p.rationale} />
+                  {p.invalidation && (
+                    <p className="invalidation">
+                      <strong>철회 조건</strong> · {p.invalidation}
+                    </p>
+                  )}
                   <div className="metric-source">
                     {sourceLinks(p.evidenceIds)}
                   </div>

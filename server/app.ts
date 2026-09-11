@@ -1073,6 +1073,16 @@ export function createApp(
             run.validation.push("시장 지수와 일정에는 외부 출처가 필요합니다.");
           if (job.skill === "rebalance" && !run.result.rebalance)
             run.validation.push("리밸런싱 제안(rebalance)이 응답에 없습니다.");
+          // A direction without a size ("축소") is not a reviewable proposal; the template requires a
+          // weight or range for every action except keep.
+          if (
+            (run.result.rebalance?.proposals || []).some(
+              (p) => p.action !== "keep" && !p.proposedWeight?.trim(),
+            )
+          )
+            run.validation.push(
+              "유지가 아닌 제안에는 제안 비중(proposedWeight)이 필요합니다.",
+            );
           if (job.skill === "headlines" && !run.result.headlines?.length)
             run.validation.push("주요 뉴스(headlines)가 응답에 없습니다.");
           if (
@@ -1102,6 +1112,19 @@ export function createApp(
                 "자동 조사 결과의 최신성을 확인할 충분한 검색 기록이 없습니다.",
               );
             }
+            // Soft check: a condition without any number (threshold, date, quarter) is usually
+            // unfalsifiable ("실적을 확인하면"). Warn, but keep the report.
+            const vague = [
+              ...run.result.reviewConditions,
+              ...(run.result.rebalance?.risks || []),
+              ...(run.result.rebalance?.proposals || []).map(
+                (p) => p.invalidation || "",
+              ),
+            ].filter((s) => s.trim() && !/\d/.test(s)).length;
+            if (vague)
+              run.validation.push(
+                `수치 기준(임계값·날짜) 없이 쓰인 재검토 조건이 ${vague}개 있습니다. 검증 가능한 조건인지 확인하세요.`,
+              );
             for (const source of run.result.sources || []) {
               const sourceHash = hash(source.url);
               if (

@@ -195,6 +195,9 @@ const resultSchema = z.object({
           action: z.enum(["keep", "add", "trim", "exit", "new"]),
           currentWeight: z.string().nullable(),
           proposedWeight: z.string().nullable(),
+          // Optional so proposals saved before these fields existed still parse.
+          conviction: z.enum(["high", "medium", "low"]).optional(),
+          invalidation: z.string().optional(),
           rationale: z.string(),
           evidenceIds: z.array(z.string()),
         }),

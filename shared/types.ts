@@ -78,6 +78,8 @@ export type DailyBrief = {
   priorities: string[];
 };
 export type RebalanceAction = "keep" | "add" | "trim" | "exit" | "new";
+// Three levels by evidence quality, never a numeric probability (see BLUEPRINT §9).
+export type Conviction = "high" | "medium" | "low";
 export type RebalancePlan = {
   stance: string;
   proposals: {
@@ -86,6 +88,9 @@ export type RebalancePlan = {
     action: RebalanceAction;
     currentWeight: string | null;
     proposedWeight: string | null;
+    // Results saved before these fields existed lack them.
+    conviction?: Conviction;
+    invalidation?: string;
     rationale: string;
     evidenceIds: string[];
   }[];

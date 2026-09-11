@@ -554,6 +554,70 @@ test("dashboard state keeps the latest headlines job and its own model settings"
     await h.close();
   }
 });
+test("rebalance proposals need a size for every non-keep action and flag conditions without numbers", async () => {
+  let mode = "sized";
+  const h = await harness(async (p) => ({
+    ...result(p),
+    reviewConditions:
+      mode === "vague"
+        ? ["실적을 확인하고 판단한다"]
+        : ["11월 초 3분기 실적에서 매출 YoY 40% 미만이면 축소"],
+    rebalance: {
+      stance: "집중도 완화",
+      cashNote: "현금 미확인",
+      risks: [],
+      proposals: [
+        {
+          symbol: "TEST",
+          name: "검증",
+          action: "trim",
+          currentWeight: "22",
+          proposedWeight: mode === "unsized" ? null : "12~15",
+          conviction: "medium",
+          rationale: "단일 종목 집중도가 최대 하락 감내 20%와 맞지 않음",
+          invalidation: "데이터센터 매출 YoY 증가율 40% 이상 유지 시 철회",
+          evidenceIds: ["s1"],
+        },
+        {
+          symbol: "HOLD",
+          name: "유지",
+          action: "keep",
+          currentWeight: "10",
+          proposedWeight: null,
+          conviction: "low",
+          rationale: "지금 움직일 근거 부족",
+          invalidation:
+            mode === "vague" ? "추세가 꺾이면" : "가이던스 하향 시 2월 재검토",
+          evidenceIds: ["portfolio-snapshot"],
+        },
+      ],
+    },
+  }));
+  try {
+    for (mode of ["sized", "unsized", "vague"]) {
+      const response = await h.send("/analyses", {
+        skill: "rebalance",
+        providers: ["codex"],
+        force: true,
+      });
+      const j = await h.wait((await response.json()).id);
+      const run = j.runs[0];
+      if (mode === "unsized") {
+        assert.equal(j.status, "failed");
+        assert.match(run.error!, /proposedWeight/);
+        continue;
+      }
+      assert.equal(j.status, "completed");
+      assert.equal(run.result?.rebalance?.proposals[0].conviction, "medium");
+      assert.equal(
+        run.validation.some((v) => v.includes("수치 기준")),
+        mode === "vague",
+      );
+    }
+  } finally {
+    await h.close();
+  }
+});
 test("active request deduplication and cancellation stop the same job", async () => {
   const h = await harness(
     async (_p, _m, _t, signal) =>
