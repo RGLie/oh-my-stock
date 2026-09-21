@@ -20,8 +20,15 @@ import {
   Play,
   CircleHelp,
   AlertCircle,
+  Send,
+  Mail,
 } from "lucide-react";
-import type { Holding, Evidence, AnalysisJob } from "../shared/types";
+import type {
+  Holding,
+  Evidence,
+  AnalysisJob,
+  DeliverySettings,
+} from "../shared/types";
 import { type ViewProps, HoldingsTable } from "./App";
 import { fallbackHeadlineSettings } from "./Headlines";
 import { Modal, Empty, Chart, Loading, LinkOut, date, fmt } from "./ui";
@@ -921,6 +928,254 @@ function QuickModelSettings({
     </section>
   );
 }
+const fallbackDelivery: DeliverySettings = {
+  enabled: false,
+  time: "07:00",
+  days: "daily",
+  telegram: true,
+  email: true,
+  emailTo: "",
+  providers: ["codex", "claude"],
+  includeAmounts: true,
+};
+// Scheduled daily brief to Telegram and e-mail. Secrets stay in .env on the server; only
+// preferences are edited here, and the status block shows what the server actually has.
+function DeliverySettings({
+  state,
+  act,
+  notify,
+}: Pick<ViewProps, "state" | "act" | "notify">) {
+  const saved = state.settings.delivery || fallbackDelivery;
+  const status = state.delivery;
+  const [busy, setBusy] = useState("");
+  const run = async (
+    label: string,
+    fn: () => Promise<{ message?: string }>,
+  ) => {
+    setBusy(label);
+    try {
+      const data = await fn();
+      notify(data.message || label + "을 시작했어요.");
+    } catch (e) {
+      notify((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const log = status?.log;
+  return (
+    <section className="card delivery-card">
+      <div className="card-top">
+        <h3>데일리 브리프 예약 발송</h3>
+        <span className={"status-pill " + (saved.enabled ? "completed" : "")}>
+          {saved.enabled ? "예약 켜짐" : "예약 꺼짐"}
+        </span>
+      </div>
+      <p className="hint form-intro">
+        서버가 켜져 있으면 매일 한국시간 정해진 시각에 데일리 브리프를 만들어
+        텔레그램과 이메일로 보내요. 브리프 1회에 AI 사용량이 소모되고 보통
+        3~10분이 걸립니다. 봇 토큰과 SMTP 비밀번호는 서버의 .env에만 저장돼요.
+      </p>
+      <div className="integration-row">
+        <span className="provider-mark telegram">✈</span>
+        <div>
+          <strong>텔레그램 봇</strong>
+          <small>
+            {status?.telegramConfigured
+              ? status.botRunning
+                ? "연결됨 · /help 로 명령 확인"
+                : "설정됨 · 봇 연결 상태를 확인 중"
+              : ".env에 TELEGRAM_BOT_TOKEN과 TELEGRAM_CHAT_ID를 설정하세요"}
+          </small>
+        </div>
+        <button
+          className="btn"
+          type="button"
+          disabled={busy !== "" || !status?.telegramConfigured}
+          onClick={() =>
+            run("텔레그램 테스트", () =>
+              act("/delivery/test", { channel: "telegram" }),
+            )
+          }
+        >
+          <Send size={15} />
+          테스트
+        </button>
+      </div>
+      <div className="integration-row">
+        <span className="provider-mark mail">@</span>
+        <div>
+          <strong>이메일 (SMTP)</strong>
+          <small>
+            {status?.emailConfigured
+              ? `${status.emailSender} 계정으로 발송`
+              : ".env에 SMTP_USER와 SMTP_PASS(앱 비밀번호)를 설정하세요"}
+          </small>
+        </div>
+        <button
+          className="btn"
+          type="button"
+          disabled={busy !== "" || !status?.emailConfigured}
+          onClick={() =>
+            run("이메일 테스트", () =>
+              act("/delivery/test", { channel: "email" }),
+            )
+          }
+        >
+          <Mail size={15} />
+          테스트
+        </button>
+      </div>
+      <form
+        className="form"
+        onSubmit={async (e) => {
+          const v = values(e);
+          const providers = (["codex", "claude"] as const).filter(
+            (id) => v["provider-" + id] === "on",
+          );
+          try {
+            await act(
+              "/settings/delivery",
+              {
+                enabled: v.enabled === "on",
+                time: v.time,
+                days: v.days,
+                telegram: v.telegram === "on",
+                email: v.email === "on",
+                emailTo: v.emailTo.trim(),
+                providers,
+                includeAmounts: v.includeAmounts === "on",
+              },
+              "PUT",
+            );
+            notify("예약 발송 설정을 저장했어요.");
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+      >
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            name="enabled"
+            defaultChecked={saved.enabled}
+          />
+          매일 자동으로 브리프를 만들어 발송
+        </label>
+        <div className="form-row">
+          <label>
+            발송 시각 (한국시간)
+            <input type="time" name="time" defaultValue={saved.time} required />
+          </label>
+          <label>
+            요일
+            <select name="days" defaultValue={saved.days}>
+              <option value="daily">매일</option>
+              <option value="weekdays">평일만</option>
+            </select>
+          </label>
+        </div>
+        <fieldset className="quick-provider">
+          <legend>브리프를 만들 AI</legend>
+          <div className="provider-options">
+            {(["codex", "claude"] as const).map((id) => {
+              const p = state.providers.find((x) => x.id === id);
+              return (
+                <label key={id}>
+                  <input
+                    type="checkbox"
+                    name={"provider-" + id}
+                    defaultChecked={saved.providers.includes(id)}
+                  />
+                  <span className={"provider-mark " + id}>
+                    {id === "codex" ? "O" : "✳"}
+                  </span>
+                  {id === "codex" ? "OpenAI" : "Claude"}
+                  <small>{p?.authenticated ? "로그인됨" : "로그인 필요"}</small>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        <p className="hint">
+          위 ‘자산과 분석 설정’의 모델과 AI 투자 파트너에서 마지막으로 쓴 추론
+          강도를 사용해요. 두 AI를 고르면 각각의 브리프가 모두 발송됩니다.
+        </p>
+        <div className="divider" />
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            name="telegram"
+            defaultChecked={saved.telegram}
+          />
+          텔레그램으로 보내기
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" name="email" defaultChecked={saved.email} />
+          이메일로 보내기
+        </label>
+        <label>
+          받는 이메일 주소
+          <input
+            type="email"
+            name="emailTo"
+            defaultValue={saved.emailTo}
+            placeholder={
+              status?.emailSender || "비워두면 SMTP 계정 주소로 발송"
+            }
+          />
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            name="includeAmounts"
+            defaultChecked={saved.includeAmounts}
+          />
+          텔레그램 /portfolio 와 메일에 평가 금액 포함 (끄면 비중·수익률만)
+        </label>
+        <div className="form-actions delivery-actions">
+          <button
+            className="btn"
+            type="button"
+            disabled={busy !== "" || status?.running}
+            onClick={() =>
+              run("지금 브리프 생성·발송", async () => {
+                await act("/delivery/run");
+                return {
+                  message:
+                    "브리프를 만들고 있어요. 완료되면 켜 둔 채널로 발송돼요.",
+                };
+              })
+            }
+          >
+            <Play size={15} />
+            지금 만들어 발송
+          </button>
+          <button className="btn primary">
+            <Save size={16} />
+            예약 설정 저장
+          </button>
+        </div>
+      </form>
+      <div className="delivery-status">
+        <small>
+          {saved.enabled && status?.nextRunAt
+            ? `다음 실행 ${date(status.nextRunAt)}`
+            : "예약이 꺼져 있어요."}
+          {status?.running ? " · 지금 브리프를 만들고 있어요" : ""}
+        </small>
+        {log && (
+          <small>
+            마지막 실행 {log.date}
+            {log.telegram ? ` · 텔레그램 ${log.telegram}` : ""}
+            {log.email ? ` · 이메일 ${log.email}` : ""}
+            {log.error ? ` · 오류: ${log.error}` : ""}
+          </small>
+        )}
+      </div>
+    </section>
+  );
+}
 export function SettingsView({ state, act, notify }: ViewProps) {
   const [checking, setChecking] = useState(false);
   return (
@@ -1105,6 +1360,7 @@ export function SettingsView({ state, act, notify }: ViewProps) {
         </section>
         <QuickModelSettings state={state} act={act} notify={notify} />
         <InvestorProfileForm state={state} act={act} notify={notify} />
+        <DeliverySettings state={state} act={act} notify={notify} />
         <section className="card backup-card">
           <h3>내 데이터 보관</h3>
           <p>

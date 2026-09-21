@@ -53,9 +53,9 @@ actions·reviewConditions·counterarguments·unknowns는 채우기 위해 쓰지
 주요 사실과 지표의 evidenceIds는 입력 evidence ID 또는 sources의 ID를 참조해야 한다. 웹에서 실제로 확인한 출처를 sources에 기록하라. 출처를 지어내거나 검색 홈페이지 자체를 근거로 제시하지 말라.
 입력 포트폴리오에서 계산된 수치의 근거 ID는 portfolio-snapshot이다. 이전 분석 결과 자체를 새로운 사실의 근거로 쓰지 말라.
 투자 프로필의 성향, 목표, 목표 시점, 감내 가능한 하락폭, 유동성 필요와 제외 조건을 조언의 제약으로 반영하라. 미입력 항목은 추정하지 말라. 목표와 제약이 충돌하면 그 이유를 설명하고 수익을 보장하지 말라.
-데일리 브리프일 때만 dailyBrief를 채우고, 다른 분석에서는 null로 두어라. 날짜와 일정 범위는 입력 briefWindow를 사용한다.
+데일리 브리프일 때만 dailyBrief를 채우고, 다른 분석에서는 null로 두어라. 날짜와 일정 범위는 입력 briefWindow를 사용한다. 데일리에서는 indices의 reason·previousChange·previousReason과 news·companies·sectors를 상세히 채워라. 확인한 항목이 없으면 빈 배열로 두고 가짜 내용을 만들지 말라.
 리밸런싱 제안일 때만 rebalance를 채우고, 주요 뉴스 브리핑일 때만 headlines를 채워라. 해당하지 않는 분석에서는 둘 다 null로 두어라.
-headline은 핵심 판단 한 문장, summary는 짧은 두세 문장, highlights는 핵심 3~5개, metrics는 중요한 수치 3~6개로 작성하라. impacts/counterarguments/actions/reviewConditions는 각각 최대 4개의 짧은 문장이며 개수를 맞추기 위한 문장은 넣지 않는다. 과도하게 긴 단락과 본문 Markdown 표를 피하라. 상세 수치는 metrics로 제공한다. 지정 JSON 스키마로 출력하라.`;
+headline은 핵심 판단 한 문장, summary는 짧은 두세 문장, highlights는 핵심 3~5개, metrics는 중요한 수치 3~6개로 작성하라. 데일리 브리프의 뉴스·기업·섹터·지수 변동 이유는 이 한도 밖에 있으며 dailyBrief 배열에 구체적으로 적는다. impacts/counterarguments/actions/reviewConditions는 각각 최대 4개의 짧은 문장이며 개수를 맞추기 위한 문장은 넣지 않는다. 과도하게 긴 단락과 본문 Markdown 표를 피하라. 상세 수치는 metrics로 제공한다. 지정 JSON 스키마로 출력하라.`;
 export const outputSchema = {
   type: "object",
   additionalProperties: false,
@@ -80,9 +80,21 @@ export const outputSchema = {
                   value: { type: "string" },
                   change: { type: "string" },
                   asOf: { type: "string" },
+                  reason: { type: "string" },
+                  previousChange: { type: "string" },
+                  previousReason: { type: "string" },
                   evidenceIds: { type: "array", items: { type: "string" } },
                 },
-                required: ["name", "value", "change", "asOf", "evidenceIds"],
+                required: [
+                  "name",
+                  "value",
+                  "change",
+                  "asOf",
+                  "reason",
+                  "previousChange",
+                  "previousReason",
+                  "evidenceIds",
+                ],
               },
             },
             events: {
@@ -115,8 +127,70 @@ export const outputSchema = {
                 ],
               },
             },
+            news: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  title: { type: "string" },
+                  summary: { type: "string" },
+                  whyItMatters: { type: "string" },
+                  evidenceIds: { type: "array", items: { type: "string" } },
+                },
+                required: ["title", "summary", "whyItMatters", "evidenceIds"],
+              },
+            },
+            companies: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  name: { type: "string" },
+                  symbol: { type: "string" },
+                  previousMove: { type: "string" },
+                  previousReason: { type: "string" },
+                  currentMove: { type: "string" },
+                  currentReason: { type: "string" },
+                  evidenceIds: { type: "array", items: { type: "string" } },
+                },
+                required: [
+                  "name",
+                  "symbol",
+                  "previousMove",
+                  "previousReason",
+                  "currentMove",
+                  "currentReason",
+                  "evidenceIds",
+                ],
+              },
+            },
+            sectors: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  name: { type: "string" },
+                  move: { type: "string" },
+                  reason: { type: "string" },
+                  evidenceIds: { type: "array", items: { type: "string" } },
+                },
+                required: ["name", "move", "reason", "evidenceIds"],
+              },
+            },
           },
-          required: ["date", "marketStatus", "priorities", "indices", "events"],
+          required: [
+            "date",
+            "marketStatus",
+            "priorities",
+            "indices",
+            "events",
+            "news",
+            "companies",
+            "sectors",
+          ],
         },
       ],
     },

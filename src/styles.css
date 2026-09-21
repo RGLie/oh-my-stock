@@ -131,11 +131,6 @@
 .brief-calendar {
   margin: 25px 0;
 }
-.brief-calendar h3,
-.brief-priorities h3 {
-  font-size: 17px;
-  margin-bottom: 18px;
-}
 .brief-event {
   padding: 18px 0;
   border-top: 1px solid #edf0f4;
@@ -177,6 +172,74 @@
 .brief-priorities li {
   padding: 5px 0;
   line-height: 1.8;
+}
+.brief-reason {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #435064;
+  margin: 8px 0 0;
+}
+.brief-reason.previous {
+  color: #657184;
+  font-size: 13px;
+}
+.brief-list {
+  margin: 8px 0 26px;
+}
+.brief-list h3,
+.brief-calendar h3,
+.brief-priorities h3 {
+  font-size: 17px;
+  margin-bottom: 18px;
+}
+.brief-item {
+  padding: 16px 0;
+  border-top: 1px solid #edf0f4;
+}
+.brief-item h4 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+.brief-item h4 small {
+  margin-left: 6px;
+  font-weight: 500;
+  color: #7b8493;
+}
+.brief-why {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #2b3544;
+}
+.brief-move {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 8px 0 0;
+}
+.brief-move dt {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #8992a1;
+}
+.brief-move dd {
+  margin: 4px 0 0;
+}
+.brief-move strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.brief-sector-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.brief-sector-head b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #187a4d;
 }
 .profile-grid {
   display: grid;
@@ -2322,6 +2385,42 @@ td.negative small {
   font-size: 0.86rem;
   margin: 12px 0 22px;
 }
+.delivery-card {
+  grid-column: 1/-1;
+}
+.delivery-card .integration-row:first-of-type {
+  border-top: 0;
+  padding-top: 8px;
+}
+.delivery-card .form {
+  margin-top: 6px;
+}
+.provider-mark.telegram {
+  background: #e6f3fb;
+  color: #2a9fd6;
+  font-size: 1rem;
+}
+.provider-mark.mail {
+  background: #fdf0e7;
+  color: #d0693a;
+  font-size: 1rem;
+}
+.delivery-actions {
+  justify-content: space-between;
+}
+.delivery-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.delivery-status small {
+  color: #8f9eb2;
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -3373,7 +3472,8 @@ td.negative small {
 .report-content .metric-source {
   overflow-wrap: anywhere;
 }
-.brief-event .report-prose {
+.brief-event .report-prose,
+.brief-item .report-prose {
   font-size: 16px;
   margin: 12px 0;
   line-height: 1.9;
@@ -3597,6 +3697,9 @@ td.negative small {
     padding: 19px 16px;
   }
   .brief-indices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brief-move {
     grid-template-columns: minmax(0, 1fr);
   }
 }

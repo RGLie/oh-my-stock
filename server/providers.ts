@@ -165,6 +165,9 @@ const resultSchema = z.object({
           value: z.string(),
           change: z.string(),
           asOf: z.string(),
+          reason: z.string().optional(),
+          previousChange: z.string().optional(),
+          previousReason: z.string().optional(),
           evidenceIds: z.array(z.string()),
         }),
       ),
@@ -180,6 +183,39 @@ const resultSchema = z.object({
           evidenceIds: z.array(z.string()),
         }),
       ),
+      news: z
+        .array(
+          z.object({
+            title: z.string(),
+            summary: z.string(),
+            whyItMatters: z.string(),
+            evidenceIds: z.array(z.string()),
+          }),
+        )
+        .optional(),
+      companies: z
+        .array(
+          z.object({
+            name: z.string(),
+            symbol: z.string(),
+            previousMove: z.string(),
+            previousReason: z.string(),
+            currentMove: z.string(),
+            currentReason: z.string(),
+            evidenceIds: z.array(z.string()),
+          }),
+        )
+        .optional(),
+      sectors: z
+        .array(
+          z.object({
+            name: z.string(),
+            move: z.string(),
+            reason: z.string(),
+            evidenceIds: z.array(z.string()),
+          }),
+        )
+        .optional(),
     })
     .nullable()
     .optional(),

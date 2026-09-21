@@ -21,6 +21,7 @@ import type {
   AnalysisTrace,
   RunEvent,
   BriefWindow,
+  DeliveryStatus,
 } from "../shared/types";
 
 const now = () => new Date().toISOString();
@@ -56,6 +57,22 @@ const defaults: AppState["settings"] = {
   accountSeq: process.env.TOSS_ACCOUNT_SEQ || "",
   // The dashboard brief defaults to OpenAI and keeps its own models, separate from the advisor's.
   headlines: { provider: "codex", models: { codex: "", claude: "sonnet" } },
+  delivery: {
+    enabled: false,
+    time: "07:00",
+    days: "daily",
+    telegram: true,
+    email: true,
+    emailTo: "",
+    providers: ["codex", "claude"],
+    includeAmounts: true,
+  },
+};
+// Implemented by server/delivery.ts; the app only knows how to ask for status and trigger sends.
+export type DeliveryHandler = {
+  status(): DeliveryStatus;
+  test(channel: "telegram" | "email"): Promise<string>;
+  runNow(): Promise<{ id: string }>;
 };
 const modelId = z.string().regex(/^[a-zA-Z0-9._:/-]{0,100}$/);
 const profileDefaults: InvestorProfile = {
@@ -491,6 +508,7 @@ export function createApp(
         stream: { status: stream.status, lastMessage: stream.lastMessage },
         skills: skillTemplates,
         templates: templates(),
+        delivery: deliveryStatus(),
       });
     }),
   );
@@ -646,6 +664,66 @@ export function createApp(
         .parse(req.body);
       store.put("meta", "settings", { ...settings(), headlines: input });
       res.json({ ok: true });
+    }),
+  );
+  let delivery: DeliveryHandler | null = null;
+  const deliveryStatus = (): DeliveryStatus =>
+    delivery?.status() || {
+      telegramConfigured: false,
+      emailConfigured: false,
+      emailSender: "",
+      botRunning: false,
+      nextRunAt: null,
+      running: false,
+      log: null,
+    };
+  app.put(
+    "/api/settings/delivery",
+    route((req, res) => {
+      const input = z
+        .object({
+          enabled: z.boolean(),
+          time: z
+            .string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "시각은 HH:MM 형식이에요."),
+          days: z.enum(["daily", "weekdays"]),
+          telegram: z.boolean(),
+          email: z.boolean(),
+          emailTo: z
+            .string()
+            .trim()
+            .max(200)
+            .refine(
+              (v) => v === "" || /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(v),
+              "이메일 주소를 확인해 주세요.",
+            ),
+          providers: z
+            .array(z.enum(["codex", "claude"]))
+            .min(1)
+            .max(2),
+          includeAmounts: z.boolean(),
+        })
+        .parse(req.body);
+      store.put("meta", "settings", {
+        ...settings(),
+        delivery: { ...input, providers: [...new Set(input.providers)] },
+      });
+      res.json({ ok: true });
+    }),
+  );
+  app.post(
+    "/api/delivery/test",
+    route(async (req, res) => {
+      const channel = z.enum(["telegram", "email"]).parse(req.body?.channel);
+      if (!delivery) throw new Error("발송 기능이 아직 준비되지 않았어요.");
+      res.json({ ok: true, message: await delivery.test(channel) });
+    }),
+  );
+  app.post(
+    "/api/delivery/run",
+    route(async (_req, res) => {
+      if (!delivery) throw new Error("발송 기능이 아직 준비되지 않았어요.");
+      res.status(202).json(await delivery.runNow());
     }),
   );
   app.put(
@@ -1039,11 +1117,17 @@ export function createApp(
             ...job.evidenceIds,
             ...(run.result.sources || []).map((s) => s.id),
           ]);
+          const briefCited = [
+            ...(run.result.dailyBrief?.indices || []),
+            ...(run.result.dailyBrief?.events || []),
+            ...(run.result.dailyBrief?.news || []),
+            ...(run.result.dailyBrief?.companies || []),
+            ...(run.result.dailyBrief?.sectors || []),
+          ];
           run.validation = [
             ...run.result.facts,
             ...(run.result.metrics || []),
-            ...(run.result.dailyBrief?.indices || []),
-            ...(run.result.dailyBrief?.events || []),
+            ...briefCited,
             ...(run.result.rebalance?.proposals || []),
             ...(run.result.headlines || []),
           ].flatMap((f) =>
@@ -1061,16 +1145,15 @@ export function createApp(
             );
           if (
             job.skill === "daily" &&
-            [
-              ...(run.result.dailyBrief?.indices || []),
-              ...(run.result.dailyBrief?.events || []),
-            ].some(
+            briefCited.some(
               (item) =>
                 !item.evidenceIds.length ||
                 item.evidenceIds.every((id) => id === "portfolio-snapshot"),
             )
           )
-            run.validation.push("시장 지수와 일정에는 외부 출처가 필요합니다.");
+            run.validation.push(
+              "시장 지수·일정·뉴스·기업·섹터에는 외부 출처가 필요합니다.",
+            );
           if (job.skill === "rebalance" && !run.result.rebalance)
             run.validation.push("리밸런싱 제안(rebalance)이 응답에 없습니다.");
           // A direction without a size ("축소") is not a reviewable proposal; the template requires a
@@ -1189,43 +1272,71 @@ export function createApp(
           : "failed";
     store.put("jobs", job.id, job);
     controllers.delete(job.id);
+    for (const listener of jobListeners) {
+      try {
+        listener(job);
+      } catch {
+        /* A delivery failure must not affect the saved analysis. */
+      }
+    }
   }
-  app.post(
-    "/api/analyses",
-    route((req, res) => {
-      const input = z
-        .object({
-          skill: z.enum([
-            "news",
-            "earnings",
-            "macro",
-            "allocation",
-            "sector",
-            "indicators",
-            "fx",
-            "daily",
-            "rebalance",
-            "headlines",
-          ]),
-          prompt: z.string().max(12000).default(""),
-          evidenceIds: z.array(z.string()).max(20).default([]),
-          autoResearch: z.boolean().default(true),
-          target: z.string().max(200).default(""),
-          models: z.object({ codex: modelId, claude: modelId }).optional(),
-          efforts: z
-            .object({
-              codex: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]),
-              claude: z.enum(["low", "medium", "high", "xhigh", "max"]),
-            })
-            .default({ codex: "high", claude: "high" }),
-          parentJobId: z.string().optional(),
-          providers: z
-            .array(z.enum(["codex", "claude"]))
-            .min(1)
-            .max(2),
-          force: z.boolean().default(false),
-        })
-        .parse(req.body);
+  // Delivery channels (Telegram, scheduler) learn about finished jobs here instead of polling the DB.
+  const jobListeners = new Set<(job: AnalysisJob) => void>();
+  const waitForJob = (id: string) =>
+    new Promise<AnalysisJob>((resolveJob) => {
+      const current = store.get<AnalysisJob>("jobs", id);
+      if (current && !["queued", "running"].includes(current.status)) {
+        resolveJob(current);
+        return;
+      }
+      const listener = (job: AnalysisJob) => {
+        if (job.id !== id) return;
+        jobListeners.delete(listener);
+        resolveJob(job);
+      };
+      jobListeners.add(listener);
+    });
+  const analysisInputSchema = z.object({
+    skill: z.enum([
+      "news",
+      "earnings",
+      "macro",
+      "allocation",
+      "sector",
+      "indicators",
+      "fx",
+      "daily",
+      "rebalance",
+      "headlines",
+    ]),
+    prompt: z.string().max(12000).default(""),
+    evidenceIds: z.array(z.string()).max(20).default([]),
+    autoResearch: z.boolean().default(true),
+    target: z.string().max(200).default(""),
+    models: z.object({ codex: modelId, claude: modelId }).optional(),
+    efforts: z
+      .object({
+        codex: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]),
+        claude: z.enum(["low", "medium", "high", "xhigh", "max"]),
+      })
+      .default({ codex: "high", claude: "high" }),
+    parentJobId: z.string().optional(),
+    providers: z
+      .array(z.enum(["codex", "claude"]))
+      .min(1)
+      .max(2),
+    force: z.boolean().default(false),
+  });
+  type AnalysisInput = z.input<typeof analysisInputSchema>;
+  type AnalysisEfforts = NonNullable<AnalysisInput["efforts"]>;
+  // Shared by the HTTP route, the Telegram bot and the scheduler. Returns the job id and whether an
+  // identical running or cached job was reused.
+  function startAnalysis(
+    raw: AnalysisInput,
+    options: { saveSettings?: boolean } = {},
+  ): { id: string; cached: boolean } {
+    const input = analysisInputSchema.parse(raw);
+    {
       const evidence = input.evidenceIds.map((id) =>
         store.get<Evidence>("evidence", id),
       );
@@ -1284,10 +1395,7 @@ export function createApp(
               ...(!input.force && !input.autoResearch ? ["completed"] : []),
             ].includes(j.status),
         );
-      if (previous) {
-        res.json({ id: previous.id, cached: true });
-        return;
-      }
+      if (previous) return { id: previous.id, cached: true };
       if (controllers.size >= 2)
         throw new Error(
           "동시에 진행 중인 분석이 많습니다. 완료 후 다시 시도해 주세요.",
@@ -1336,7 +1444,7 @@ export function createApp(
           "한 번에 분석할 자료가 너무 큽니다. 원문 범위를 줄여 주세요.",
         );
       // Dashboard headlines run at low effort on purpose; they must not overwrite the advisor's saved preferences.
-      if (input.skill !== "headlines")
+      if (input.skill !== "headlines" && options.saveSettings !== false)
         store.put("meta", "settings", {
           ...settings(),
           models: model,
@@ -1344,7 +1452,14 @@ export function createApp(
         });
       store.put("jobs", id, job);
       void executeJob(job);
-      res.status(202).json({ id });
+      return { id, cached: false };
+    }
+  }
+  app.post(
+    "/api/analyses",
+    route((req, res) => {
+      const started = startAnalysis(req.body);
+      res.status(started.cached ? 200 : 202).json(started);
     }),
   );
   app.post(
@@ -1438,6 +1553,36 @@ export function createApp(
     stream,
     syncToss,
     refreshPrices,
+    // Used by server/delivery.ts (Telegram bot and scheduler); nothing here bypasses the analysis validation.
+    startAnalysis,
+    waitForJob,
+    onJobFinished(listener: (job: AnalysisJob) => void) {
+      jobListeners.add(listener);
+      return () => jobListeners.delete(listener);
+    },
+    setDelivery(handler: DeliveryHandler | null) {
+      delivery = handler;
+    },
+    settings,
+    summary,
+    fx,
+    holdings,
+    connection: () => connection,
+    providers: () => providerCache,
+    activeJobs: () =>
+      store
+        .all<AnalysisJob>("jobs")
+        .filter((j) => ["queued", "running"].includes(j.status)),
+    // Saved effort strings are validated by the analysis schema at start time.
+    efforts: () => settings().efforts as AnalysisEfforts,
+    cancelAll() {
+      let count = 0;
+      for (const c of controllers.values()) {
+        c.abort();
+        count++;
+      }
+      return count;
+    },
     async initialize() {
       if (allowExternal) {
         void providers.health().then((p) => {

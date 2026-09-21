@@ -277,6 +277,9 @@ test("daily reports require matching date and external citations, and save rejec
             value: "검증값",
             change: "검증",
             asOf: "검증",
+            reason: "검증 이유",
+            previousChange: "+0.1%",
+            previousReason: "전일 검증",
             evidenceIds:
               mode === "missing"
                 ? []
@@ -287,6 +290,21 @@ test("daily reports require matching date and external citations, and save rejec
         ],
         events: [],
         priorities: [],
+        news: [
+          {
+            title: "뉴스",
+            summary: "요약",
+            whyItMatters: "영향",
+            evidenceIds:
+              mode === "missing"
+                ? []
+                : mode === "citation"
+                  ? ["invented"]
+                  : ["s1"],
+          },
+        ],
+        companies: [],
+        sectors: [],
       },
     };
     if (mode === "absent") delete output.dailyBrief;

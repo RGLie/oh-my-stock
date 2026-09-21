@@ -55,6 +55,27 @@ export type BriefWindow = {
   dayEndAt: string;
   lookaheadEndAt: string;
 };
+export type DailyBriefNews = {
+  title: string;
+  summary: string;
+  whyItMatters: string;
+  evidenceIds: string[];
+};
+export type DailyBriefCompany = {
+  name: string;
+  symbol: string;
+  previousMove: string;
+  previousReason: string;
+  currentMove: string;
+  currentReason: string;
+  evidenceIds: string[];
+};
+export type DailyBriefSector = {
+  name: string;
+  move: string;
+  reason: string;
+  evidenceIds: string[];
+};
 export type DailyBrief = {
   date: string;
   marketStatus: string;
@@ -63,6 +84,10 @@ export type DailyBrief = {
     value: string;
     change: string;
     asOf: string;
+    // Optional on results saved before the daily brief asked for move reasons.
+    reason?: string;
+    previousChange?: string;
+    previousReason?: string;
     evidenceIds: string[];
   }[];
   events: {
@@ -76,6 +101,9 @@ export type DailyBrief = {
     evidenceIds: string[];
   }[];
   priorities: string[];
+  news?: DailyBriefNews[];
+  companies?: DailyBriefCompany[];
+  sectors?: DailyBriefSector[];
 };
 export type RebalanceAction = "keep" | "add" | "trim" | "exit" | "new";
 // Three levels by evidence quality, never a numeric probability (see BLUEPRINT §9).
@@ -290,6 +318,35 @@ export type HeadlineSettings = {
   provider: "codex" | "claude";
   models: { codex: string; claude: string };
 };
+// Scheduled daily brief delivery. Secrets (bot token, SMTP password) live only in .env; this holds preferences.
+export type DeliverySettings = {
+  enabled: boolean;
+  // Korean local time "HH:MM".
+  time: string;
+  days: "daily" | "weekdays";
+  telegram: boolean;
+  email: boolean;
+  emailTo: string;
+  providers: ("codex" | "claude")[];
+  includeAmounts: boolean;
+};
+export type DeliveryStatus = {
+  telegramConfigured: boolean;
+  emailConfigured: boolean;
+  emailSender: string;
+  botRunning: boolean;
+  nextRunAt: string | null;
+  running: boolean;
+  log: {
+    date: string;
+    jobId: string | null;
+    startedAt: string;
+    finishedAt: string | null;
+    telegram: string | null;
+    email: string | null;
+    error: string | null;
+  } | null;
+};
 export type AppState = {
   serverNow?: string;
   profile: InvestorProfile;
@@ -307,7 +364,9 @@ export type AppState = {
     efforts?: { codex: string; claude: string };
     accountSeq: string;
     headlines?: HeadlineSettings;
+    delivery?: DeliverySettings;
   };
+  delivery?: DeliveryStatus;
   connection: {
     configured: boolean;
     status: string;

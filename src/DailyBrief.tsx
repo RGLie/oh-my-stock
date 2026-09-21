@@ -55,6 +55,17 @@ export function DailyBriefContent({
                 <strong>{index.value}</strong>
                 <b>{index.change}</b>
                 <small>{index.asOf}</small>
+                {index.reason ? (
+                  <p className="brief-reason">{index.reason}</p>
+                ) : null}
+                {index.previousChange || index.previousReason ? (
+                  <p className="brief-reason previous">
+                    전일{" "}
+                    {[index.previousChange, index.previousReason]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : null}
                 <div className="metric-source">
                   {sourceLinks(index.evidenceIds)}
                 </div>
@@ -62,6 +73,72 @@ export function DailyBriefContent({
             ))}
           </div>
         </>
+      )}
+      {brief.news && brief.news.length > 0 && (
+        <section className="brief-list">
+          <h3>메인 뉴스</h3>
+          {brief.news.map((item, i) => (
+            <article className="brief-item" key={i}>
+              <h4>{item.title}</h4>
+              <ReportText text={item.summary} />
+              {item.whyItMatters ? (
+                <p className="brief-why">{item.whyItMatters}</p>
+              ) : null}
+              <div className="metric-source">
+                {sourceLinks(item.evidenceIds)}
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+      {brief.companies && brief.companies.length > 0 && (
+        <section className="brief-list">
+          <h3>주요 기업 · 주가 변동</h3>
+          {brief.companies.map((company, i) => (
+            <article className="brief-item" key={i}>
+              <h4>
+                {company.name}
+                {company.symbol ? <small> {company.symbol}</small> : null}
+              </h4>
+              <dl className="brief-move">
+                <div>
+                  <dt>전일</dt>
+                  <dd>
+                    <strong>{company.previousMove}</strong>
+                    <ReportText text={company.previousReason} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>현재</dt>
+                  <dd>
+                    <strong>{company.currentMove}</strong>
+                    <ReportText text={company.currentReason} />
+                  </dd>
+                </div>
+              </dl>
+              <div className="metric-source">
+                {sourceLinks(company.evidenceIds)}
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+      {brief.sectors && brief.sectors.length > 0 && (
+        <section className="brief-list">
+          <h3>섹터 동향</h3>
+          {brief.sectors.map((sector, i) => (
+            <article className="brief-item brief-sector" key={i}>
+              <div className="brief-sector-head">
+                <h4>{sector.name}</h4>
+                <b>{sector.move}</b>
+              </div>
+              <ReportText text={sector.reason} />
+              <div className="metric-source">
+                {sourceLinks(sector.evidenceIds)}
+              </div>
+            </article>
+          ))}
+        </section>
       )}
       {[
         { label: "오늘 확인할 일정", events: today },

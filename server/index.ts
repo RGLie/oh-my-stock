@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { resolve } from "node:path";
 import { createApp } from "./app";
+import { setupDelivery } from "./delivery";
 const runtime = createApp();
 const production = process.argv.includes("--production");
 if (production) {
@@ -17,10 +18,13 @@ if (production) {
   });
   runtime.app.use(vite.middlewares);
 }
+// Telegram bot and scheduled brief delivery; a misconfigured .env stops startup with a clear message.
+const delivery = setupDelivery(runtime);
 const port = Number(process.env.PORT || 4310);
 const server = runtime.app.listen(port, "127.0.0.1", () => {
   console.log(`Oh My Stock: http://127.0.0.1:${port}`);
   void runtime.initialize();
+  void delivery.start();
 });
 server.on("error", (e) => {
   console.error(e.message);
@@ -29,6 +33,7 @@ server.on("error", (e) => {
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () => {
+    void delivery.stop();
     runtime.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();

@@ -47,6 +47,14 @@ const outcomes = await Promise.all(
         [...result.dailyBrief.indices, ...result.dailyBrief.events].every(
           (x) =>
             x.evidenceIds.length && x.evidenceIds.every((id) => ids.has(id)),
+        ) &&
+        [
+          ...(result.dailyBrief.news || []),
+          ...(result.dailyBrief.companies || []),
+          ...(result.dailyBrief.sectors || []),
+        ].every(
+          (x) =>
+            x.evidenceIds.length && x.evidenceIds.every((id) => ids.has(id)),
         );
       const summary = {
         provider,
